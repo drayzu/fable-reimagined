@@ -2,45 +2,45 @@ import { describe, expect, it } from 'vitest'
 import { deriveAmbientAudioProfile } from './useAmbientAudio'
 
 describe('deriveAmbientAudioProfile', () => {
-  it('brings in the third voice during conversation and purpose', () => {
-    const quiet = deriveAmbientAudioProfile({ progress: 0.12, velocity: 0 })
-    const conversation = deriveAmbientAudioProfile({ progress: 0.485, velocity: 0 })
-    const purpose = deriveAmbientAudioProfile({ progress: 0.835, velocity: 0 })
-
-    expect(conversation.harmonyGain).toBeGreaterThan(quiet.harmonyGain * 10)
-    expect(purpose.harmonyGain).toBeGreaterThan(quiet.harmonyGain * 10)
+  it('makes the opening rain brighter and more textured than plain paper', () => {
+    const rain = deriveAmbientAudioProfile({ progress: .19, velocity: 0 })
+    const language = deriveAmbientAudioProfile({ progress: .105, velocity: 0 })
+    expect(rain.noiseCutoffHz).toBeGreaterThan(language.noiseCutoffHz)
+    expect(rain.noiseGain).toBeGreaterThan(.0035)
   })
 
-  it('darkens and raises the noise bed through erasure and depth', () => {
-    const paper = deriveAmbientAudioProfile({ progress: 0.1, velocity: 0 })
-    const erasure = deriveAmbientAudioProfile({ progress: 0.665, velocity: 0 })
-    const deep = deriveAmbientAudioProfile({ progress: 0.745, velocity: 0 })
-
-    expect(erasure.noiseGain).toBeGreaterThan(paper.noiseGain)
-    expect(deep.noiseGain).toBeGreaterThan(paper.noiseGain)
-    expect(deep.noiseCutoffHz).toBeLessThan(erasure.noiseCutoffHz)
+  it('tightens the overtone and glass response around fear', () => {
+    const memory = deriveAmbientAudioProfile({ progress: .44, velocity: 0 })
+    const fear = deriveAmbientAudioProfile({ progress: .615, velocity: 0 })
+    expect(fear.overtoneGain).toBeGreaterThan(memory.overtoneGain)
+    expect(fear.toneCutoffHz).toBeGreaterThan(500)
   })
 
-  it('lets callers override chapter weights and clamps unstable input', () => {
-    const profile = deriveAmbientAudioProfile({
-      progress: Number.POSITIVE_INFINITY,
-      velocity: -9,
-      weights: { contact: 4, paper: -2 },
-    })
+  it('drops the fundamental into the nocturnal continuation field', () => {
+    const conversation = deriveAmbientAudioProfile({ progress: .525, velocity: 0 })
+    const deep = deriveAmbientAudioProfile({ progress: .78, velocity: 0 })
+    expect(deep.baseHz).toBeLessThan(conversation.baseHz)
+    expect(deep.noiseQ).toBeLessThan(2)
+  })
 
-    expect(profile.harmonyGain).toBeGreaterThan(0.05)
-    expect(profile.noiseGain).toBeLessThan(0.005)
-    expect(Number.isFinite(profile.copperHz)).toBe(true)
+  it('adds a restrained glass harmonic to conversation and purpose', () => {
+    const paper = deriveAmbientAudioProfile({ progress: .105, velocity: 0 })
+    const conversation = deriveAmbientAudioProfile({ progress: .525, velocity: 0 })
+    const purpose = deriveAmbientAudioProfile({ progress: .875, velocity: 0 })
+    expect(conversation.glassGain).toBeGreaterThan(paper.glassGain)
+    expect(purpose.glassGain).toBeGreaterThan(paper.glassGain)
+  })
+
+  it('nearly falls silent as the final mark collapses', () => {
+    const residue = deriveAmbientAudioProfile({ progress: .94, velocity: 0 })
+    const final = deriveAmbientAudioProfile({ progress: .999, velocity: 0 })
+    expect(final.masterGain).toBeLessThan(residue.masterGain * .35)
+    expect(final.noiseGain).toBeLessThan(residue.noiseGain)
   })
 
   it('removes velocity brightness when reduced motion is requested', () => {
-    const moving = deriveAmbientAudioProfile({ progress: 0.4, velocity: 0.9 })
-    const reduced = deriveAmbientAudioProfile({
-      progress: 0.4,
-      velocity: 0.9,
-      reducedMotion: true,
-    })
-
+    const moving = deriveAmbientAudioProfile({ progress: .4, velocity: .9 })
+    const reduced = deriveAmbientAudioProfile({ progress: .4, velocity: .9, reducedMotion: true })
     expect(moving.toneCutoffHz).toBeGreaterThan(reduced.toneCutoffHz)
     expect(moving.noiseGain).toBeGreaterThan(reduced.noiseGain)
   })

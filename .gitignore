@@ -4,3 +4,11 @@ playwright-report
 test-results
 *.tsbuildinfo
 .DS_Store
+
+# Reproducible visual QA outputs and duplicate reference selections
+artifacts/qa/
+art-direction/**/review/
+art-direction/**/review-debug/
+art-direction/**/living-review/
+images-reference/selection/
+images-reference/selection2/

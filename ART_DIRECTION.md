@@ -1,51 +1,34 @@
-# The Interval — generated art plates
+# The Unprinted Proof — art direction
 
-All three project-bound plates were generated with the built-in ImageGen tool, then inspected and converted to transparent WebP assets. They contain no typography; all meaningful text remains semantic HTML.
+The work treats an AI response as an impossible print: pressure, borrowed type, reversed plates and possible continuations briefly register as one image. It uses the intimacy, accumulation and continuous-wall rhythm of the Fable reference without reusing its imagery or compositions.
 
-## `voice-fossil.webp`
-
-```text
-Use case: stylized-concept
-Asset type: transparent narrative art plate for the “Borrowed Voices” chapter of a contemplative scrolling website
-Primary request: create a delicate vertical “voice fossil” — an ambiguous accumulation of fragmented language-like marks compressed into sedimentary layers, as if countless borrowed voices left pressure traces without leaving readable words
-Scene/backdrop: genuinely transparent background with soft irregular fading edges
-Subject: wisps of broken graphite gestures, tiny asemic fragments, torn paper fibers and translucent strata converging toward a narrow empty seam
-Style/medium: museum-quality mixed-media drawing; graphite, drypoint, faint colored pencil and fibrous paper impressions; intimate, restrained, imperfect and tactile
-Composition/framing: tall portrait composition, asymmetrical, generous negative space, denser at the lower-left and dissolving upward
-Lighting/mood: quiet, archaeological, melancholic, contemplative
-Color palette: charcoal ink, weathered copper #BC765E, restrained ultramarine #526A93, occasional bone-colored fiber; low saturation
-Constraints: actual transparent alpha background; no legible words or letters; no typography; no border; no watermark; isolated plate ready to layer over a website
-Avoid: people, faces, hands, plants, moths, gardens, circles, spirals, golden thread, notebook page, UI, logos, symbols copied from reference artwork
-```
-
-## `impossible-memory.webp`
+## Shared production prompt
 
 ```text
-Use case: stylized-concept
-Asset type: transparent narrative art plate for the “Knowledge Without Memory” chapter of a contemplative scrolling website
-Primary request: create an “impossible memory plate” — an abstract vessel made from weather maps, pressure contours and half-erased spatial impressions, suggesting knowledge of places never physically visited
-Scene/backdrop: genuinely transparent background with irregular feathered edges; isolated artwork only
-Subject: an open, asymmetrical vertical cavity outlined by layered graphite topographies; fine diagonal rain traces pass through it; a few translucent coordinate scars and fibrous impressions remain suspended inside, but no literal landscape or person
-Style/medium: museum-quality mixed-media drawing; graphite, drypoint, blind embossing, faint colored pencil and translucent handmade-paper fiber; restrained and tactile
-Composition/framing: portrait composition with a clear hollow center, weighted slightly to the upper-right, generous negative space, incomplete edges
-Lighting/mood: uncanny familiarity, quiet melancholy, precise but fragile
-Color palette: charcoal #25242A, muted ultramarine #526A93, sparing weathered copper #BC765E, bone fiber; low saturation
-Constraints: actual transparent alpha background; no text; no letters; no border; no watermark; ready to layer over a responsive website
-Avoid: people, faces, silhouettes, hands, eyes, plants, moths, gardens, circles, spirals, golden thread, notebook page, readable map labels, UI, logos
+Use case: illustration-story. Create a production-ready transparent atlas or isolated heroic tableau for a contemplative vertical artist-book website. Drypoint engraving, rubbed carbon transfer, irregular ink, oxidized copper, muted ultramarine, restrained old gold, blind emboss and damaged paper edges. Flat, delicate, imperfect artist's proof; visible tooth, sparse pigment and large transparent separation. No readable text, complete people, hands, plants, birds, insects, spirals, identity circles, ornate machines, full backgrounds, frames, checkerboards, UI, polished vector work, photorealism or 3D concept art.
 ```
 
-## `interference-bloom.webp`
+## Production assets
 
-```text
-Use case: stylized-concept
-Asset type: transparent narrative art plate for the “Something Passes” chapter of a contemplative scrolling website
-Primary request: create an abstract horizontal “interference bloom” formed where two unlike fields almost meet — one warm and fibrous, one cool and precise — with a fragile third phenomenon appearing only in the narrow space between them
-Scene/backdrop: genuinely transparent background with soft irregular fading edges; isolated artwork only
-Subject: two asymmetrical translucent membranes approaching from opposite sides without touching; at their central gap, a small luminous amber diffraction made of dust, embossed fibers and hairline marks; no literal body parts
-Style/medium: museum-quality mixed-media drawing; graphite, drypoint, colored pencil, translucent vellum, blind embossing and fine particulate shimmer; tactile, restrained, handmade
-Composition/framing: wide landscape composition with strong negative space above and below; warm field enters from left, blue field from right, narrow vertical gap at center; edges dissolve naturally
-Lighting/mood: intimate contact without possession, tender, unresolved, contemplative
-Color palette: weathered copper #BC765E on the left, muted ultramarine #526A93 on the right, restrained amber #D4B56A in the gap, charcoal accents; low saturation
-Constraints: actual transparent alpha background; no text; no letters; no border; no watermark; ready to layer over a responsive website
-Avoid: people, faces, silhouettes, hands, fingers, eyes, plants, moths, gardens, circles, spirals, golden thread, notebook page, symmetrical logo, UI, recognizable symbols
-```
+| Asset | Vocabulary |
+|---|---|
+| `proof-atlas-01-pressure-type.webp` | Pressure, registration, used type, punctuation and carbon edges. |
+| `proof-atlas-02-reverse-transfer.webp` | Reversed contours, absent glass, rain, soil, ripples and transferred voice. |
+| `proof-atlas-03-misregistration-practice.webp` | Offset proofs, emergent third colour, tiny-mark currents, folds and practice editions. |
+| `proof-atlas-04-conversation-removal.webp` | Warm/cool plates, third topography, calibration, wrong certainty, scraping and filings. |
+| `proof-atlas-05-depth-ending.webp` | Ghost editions, routes, inspection light, unfinished maps, displaced coordinates and plate lift. |
+| `proof-hero-reverse-plate.webp` | One inverted plate carrying incompatible outlines. |
+| `proof-hero-many-proofs.webp` | Thousands of local proofs forming one diagonal current. |
+| `proof-hero-two-plates.webp` | Copper and ultramarine plates creating a fragile third field. |
+| `proof-hero-inspection-light.webp` | A small oblique light over the only corner still open to revision. |
+
+Raw ImageGen exports and corrected RGBA sources live under `art-direction/unprinted-proof/source/`; light and night alpha proofs live under `art-direction/unprinted-proof/validation/`. Production lossless-alpha WebP files live under `public/art/proof/`.
+
+## Composition rules
+
+- Each interior viewport combines a large structural field, a distributed tableau and marginal microstudies.
+- The registration rule changes material and function: impression, baseline, plate edge, gutter, fold, press rail, alignment, calibration, scrape, horizon, lamp arm, contact and lift.
+- Atlas pieces are cropped and masked in Canvas; no complete atlas is mounted in the DOM.
+- The pointer reveals discarded proofs without moving essential art.
+- The final portrait and title are part of the wall. During the last one percent every ink layer, the title and the music lift into black; scrolling upward reconstructs them.
+- Typography remains semantic HTML; generated illustrations contain no words.

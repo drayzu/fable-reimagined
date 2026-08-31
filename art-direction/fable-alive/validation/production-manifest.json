@@ -1,0 +1,236 @@
+[
+  {
+    "id": "tile-00",
+    "source": "/art/fable-alive/tile-00.webp",
+    "worldY": 0,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 32066
+  },
+  {
+    "id": "tile-01",
+    "source": "/art/fable-alive/tile-01.webp",
+    "worldY": 1200,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 482418
+  },
+  {
+    "id": "tile-02",
+    "source": "/art/fable-alive/tile-02.webp",
+    "worldY": 2400,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 180020
+  },
+  {
+    "id": "tile-03",
+    "source": "/art/fable-alive/tile-03.webp",
+    "worldY": 3600,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 563776
+  },
+  {
+    "id": "tile-04",
+    "source": "/art/fable-alive/tile-04.webp",
+    "worldY": 4800,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 333170
+  },
+  {
+    "id": "tile-05",
+    "source": "/art/fable-alive/tile-05.webp",
+    "worldY": 6000,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 195890
+  },
+  {
+    "id": "tile-06",
+    "source": "/art/fable-alive/tile-06.webp",
+    "worldY": 7200,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 490500
+  },
+  {
+    "id": "tile-07",
+    "source": "/art/fable-alive/tile-07.webp",
+    "worldY": 8400,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 175784
+  },
+  {
+    "id": "tile-08",
+    "source": "/art/fable-alive/tile-08.webp",
+    "worldY": 9600,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 85442
+  },
+  {
+    "id": "tile-09",
+    "source": "/art/fable-alive/tile-09.webp",
+    "worldY": 10800,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 144994
+  },
+  {
+    "id": "tile-10",
+    "source": "/art/fable-alive/tile-10.webp",
+    "worldY": 12000,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 181014
+  },
+  {
+    "id": "tile-11",
+    "source": "/art/fable-alive/tile-11.webp",
+    "worldY": 13200,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 141536
+  },
+  {
+    "id": "tile-12",
+    "source": "/art/fable-alive/tile-12.webp",
+    "worldY": 14400,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 238318
+  },
+  {
+    "id": "tile-13",
+    "source": "/art/fable-alive/tile-13.webp",
+    "worldY": 15600,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 180844
+  },
+  {
+    "id": "tile-14",
+    "source": "/art/fable-alive/tile-14.webp",
+    "worldY": 16800,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 83768
+  },
+  {
+    "id": "tile-15",
+    "source": "/art/fable-alive/tile-15.webp",
+    "worldY": 18000,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 174314
+  },
+  {
+    "id": "tile-16",
+    "source": "/art/fable-alive/tile-16.webp",
+    "worldY": 19200,
+    "worldHeight": 1200,
+    "pixelWidth": 2160,
+    "pixelHeight": 1620,
+    "alphaExtrema": [
+      255,
+      255
+    ],
+    "bytes": 133304
+  },
+  {
+    "id": "tile-17",
+    "source": "/art/fable-alive/tile-17.webp",
+    "worldY": 20400,
+    "worldHeight": 80,
+    "pixelWidth": 2160,
+    "pixelHeight": 108,
+    "alphaExtrema": [
+      0,
+      255
+    ],
+    "bytes": 23384
+  }
+]

@@ -4,7 +4,8 @@ export default defineConfig({
   testDir: './tests',
   outputDir: './test-results',
   fullyParallel: false,
-  workers: 2,
+  // Visual video capture and RAF timing must not compete for the same GPU.
+  workers: 1,
   retries: 0,
   timeout: 45_000,
   expect: { timeout: 8_000 },

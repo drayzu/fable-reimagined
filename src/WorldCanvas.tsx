@@ -1,1035 +1,289 @@
 import { useEffect, useRef, type MutableRefObject } from 'react'
 import {
-  advanceMaxRevealY,
-  clamp,
-  createSeededRandom,
-  fractalNoise1D,
-  getVisibleWorldRange,
-  lerp,
-  markReveal,
-  randomAt,
-  revealCandidateY,
-  smoothstep,
-  worldToViewportY,
-  type WorldTransform,
-} from './worldGeometry'
-import {
-  getLocalPassageProgress,
-  getPassageIndex,
-  interpolatePassageProfiles,
-  passages,
-  type WorldFrame,
+  PROOF_PALETTE, assetDefinitions, assetProofMarks, getLocalProofProgress, getMotifState,
+  getProofBeatIndex, interpolateProofProfiles, proofBeats,
+  type AssetId, type AssetProofMark, type ProofBeat, type ProofStage, type WorldFrame,
 } from './world'
+import {
+  advanceMaxRevealY, clamp, createSeededRandom, getVisibleWorldRange, lerp, markReveal,
+  noise1D, revealCandidateY, smoothstep, worldToViewportY, type WorldTransform,
+} from './worldGeometry'
 
 export const WORLD_HEIGHT = 20_000
 
-interface WorldCanvasProps {
-  frameRef: MutableRefObject<WorldFrame>
-  onUiFrame?: (frame: WorldFrame) => void
+interface WorldCanvasProps { frameRef: MutableRefObject<WorldFrame>; onUiFrame?: (frame: WorldFrame) => void }
+interface Fiber { x: number; y: number; length: number; angle: number; alpha: number }
+type AssetImages = Partial<Record<AssetId, HTMLImageElement>>
+
+const fiberRandom = createSeededRandom('unprinted-proof/fibers')
+const FIBERS: readonly Fiber[] = Array.from({ length: 560 }, () => ({ x: fiberRandom(), y: fiberRandom(), length: 4 + fiberRandom() * 34, angle: (fiberRandom() - .5) * .7, alpha: .02 + fiberRandom() * .06 }))
+
+function hexToRgb(hex: string): [number, number, number] { const value = Number.parseInt(hex.slice(1), 16); return [(value >> 16) & 255, (value >> 8) & 255, value & 255] }
+function mixColor(from: string, to: string, amount: number): string { const a = hexToRgb(from); const b = hexToRgb(to); const t = clamp(amount); return `rgb(${Math.round(lerp(a[0], b[0], t))} ${Math.round(lerp(a[1], b[1], t))} ${Math.round(lerp(a[2], b[2], t))})` }
+function worldY(progress: number): number { return progress * WORLD_HEIGHT }
+function viewY(progress: number, transform: WorldTransform): number { return worldToViewportY(worldY(progress), transform) }
+function revealed(progress: number, maxRevealY: number, feather = 190): number { return markReveal(worldY(progress), maxRevealY, feather) }
+function visible(transform: WorldTransform, start: number, end: number, overscan = .016): boolean { const range = getVisibleWorldRange(transform, transform.viewportHeight * .4); return range.end >= worldY(start - overscan) && range.start <= worldY(end + overscan) }
+function line(context: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, seed = 0): void { const wobble = noise1D((x1 + y1) * .009, seed) * 2.2; context.beginPath(); context.moveTo(x1, y1); context.quadraticCurveTo((x1 + x2) / 2 + wobble, (y1 + y2) / 2 - wobble, x2, y2); context.stroke() }
+function ellipse(context: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, rotation = 0): void { context.beginPath(); context.ellipse(x, y, Math.max(.1, rx), Math.max(.1, ry), rotation, 0, Math.PI * 2); context.stroke() }
+function ink(night: number, alpha: number): string { return night > .5 ? `rgba(232,225,211,${alpha})` : `rgba(37,36,42,${alpha})` }
+
+function drawBackdrop(context: CanvasRenderingContext2D, width: number, height: number, progress: number): void {
+  const profile = interpolateProofProfiles(progress).visual; const dissolve = getMotifState(progress).dissolution
+  context.fillStyle = mixColor(PROOF_PALETTE.bone, PROOF_PALETTE.night, profile.night); context.fillRect(0, 0, width, height)
+  const glow = context.createRadialGradient(width * .48, height * .4, 8, width * .48, height * .4, Math.max(width, height) * .82)
+  glow.addColorStop(0, profile.night > .5 ? `rgba(72,76,92,${.13 * profile.glow})` : `rgba(255,249,232,${.2 * profile.glow})`); glow.addColorStop(1, 'rgba(0,0,0,0)')
+  context.fillStyle = glow; context.fillRect(0, 0, width, height)
+  if (dissolve > 0) { context.fillStyle = `rgba(3,4,7,${smoothstep(0, 1, dissolve)})`; context.fillRect(0, 0, width, height) }
 }
 
-interface Point {
-  x: number
-  y: number
-}
-
-interface TrailPoint extends Point {
-  at: number
-}
-
-interface FieldMark {
-  y: number
-  x: number
-  length: number
-  seed: number
-  family: number
-}
-
-const COLORS = {
-  bone: '#eeeae0',
-  ink: '#25242a',
-  copper: '#bc765e',
-  blue: '#526a93',
-  gold: '#d4b56a',
-  night: '#12141b',
-  nightInk: '#e8e1d3',
-  paperWarm: '#e9e0d3',
-  paperCool: '#e1e4e0',
-}
-
-const PASSAGE_BOUNDS = [0, 0.06, 0.15, 0.23, 0.34, 0.44, 0.53, 0.63, 0.7, 0.79, 0.88, 0.94, 1]
-
-function passageAt(progress: number): { index: number; local: number } {
-  const value = clamp(progress)
-  const index = Math.min(
-    PASSAGE_BOUNDS.length - 2,
-    Math.max(0, PASSAGE_BOUNDS.findIndex((end, candidate) => candidate > 0 && value <= end) - 1),
-  )
-  const start = PASSAGE_BOUNDS[index]
-  const end = PASSAGE_BOUNDS[index + 1]
-  return { index, local: clamp((value - start) / (end - start)) }
-}
-
-function hexChannels(hex: string): [number, number, number] {
-  const value = Number.parseInt(hex.slice(1), 16)
-  return [(value >> 16) & 255, (value >> 8) & 255, value & 255]
-}
-
-function colorChannels(color: string): [number, number, number] {
-  if (color.startsWith('#')) return hexChannels(color)
-  const channels = color.match(/[\d.]+/g)?.slice(0, 3).map(Number)
-  if (!channels || channels.length < 3 || channels.some((channel) => !Number.isFinite(channel))) return [0, 0, 0]
-  return [channels[0], channels[1], channels[2]]
-}
-
-function rgba(hex: string, alpha: number): string {
-  const [red, green, blue] = hexChannels(hex)
-  return `rgba(${red}, ${green}, ${blue}, ${clamp(alpha)})`
-}
-
-function mixColor(from: string, to: string, amount: number): string {
-  const first = colorChannels(from)
-  const second = colorChannels(to)
-  const mixed = first.map((channel, index) => Math.round(lerp(channel, second[index], clamp(amount))))
-  return `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`
-}
-
-function rangeWeight(progress: number, start: number, end: number, feather = 0.018): number {
-  return smoothstep(start - feather, start + feather, progress) * (1 - smoothstep(end - feather, end + feather, progress))
-}
-
-function nightAt(progress: number): number {
-  const descend = smoothstep(0.635, 0.715, progress)
-  const returnToPaper = smoothstep(0.885, 0.95, progress)
-  return descend * (1 - returnToPaper)
-}
-
-function backgroundAt(progress: number): string {
-  const warmth = rangeWeight(progress, 0.2, 0.42, 0.055)
-  const cool = rangeWeight(progress, 0.42, 0.64, 0.05)
-  const paper = mixColor(mixColor(COLORS.bone, COLORS.paperWarm, warmth * 0.48), COLORS.paperCool, cool * 0.34)
-  return mixColor(paper, COLORS.night, nightAt(progress))
-}
-
-function buildFieldMarks(): FieldMark[] {
-  const random = createSeededRandom('the-interval-field-v3')
-  const marks: FieldMark[] = []
-  for (let index = 0; index < 760; index += 1) {
-    const y = (index + random() * 0.9) / 760 * WORLD_HEIGHT
-    marks.push({
-      y,
-      x: 0.035 + random() * 0.93,
-      length: 8 + random() * 42,
-      seed: index * 19 + 7,
-      family: Math.floor(random() * 5),
-    })
+function fieldColor(beat: ProofBeat): string {
+  const alpha = .08 + beat.field.pigment * .15
+  switch (beat.field.kind) {
+    case 'misregister': return `rgba(188,118,94,${alpha})`
+    case 'meeting': return `rgba(117,107,135,${alpha})`
+    case 'calibration': return `rgba(37,39,49,${alpha * 1.2})`
+    case 'scar': return `rgba(22,24,31,${alpha * 1.35})`
+    case 'edition': return `rgba(9,11,18,${alpha * 1.5})`
+    case 'inspection': return `rgba(12,14,21,${alpha * 1.3})`
+    case 'residue': return `rgba(6,8,13,${alpha * 1.5})`
+    case 'void': return 'rgba(2,3,6,.68)'
+    case 'transfer': return `rgba(82,106,147,${alpha * .58})`
+    case 'fold': return `rgba(212,181,106,${alpha * .45})`
+    default: return `rgba(255,255,255,${alpha * .22})`
   }
-  return marks
 }
 
-const FIELD_MARKS = buildFieldMarks()
-
-function organicStroke(
-  context: CanvasRenderingContext2D,
-  points: readonly Point[],
-  color: string,
-  width: number,
-  alpha: number,
-  seed: number,
-): void {
-  if (points.length < 2 || alpha <= 0.001) return
-  context.save()
-  context.strokeStyle = rgba(color, alpha)
-  context.lineWidth = width
-  context.lineCap = 'round'
-  context.lineJoin = 'round'
-  context.beginPath()
-  const first = points[0]
-  context.moveTo(first.x, first.y)
-  for (let index = 1; index < points.length - 1; index += 1) {
-    const point = points[index]
-    const next = points[index + 1]
-    const jitterX = (randomAt(seed, index * 2) - 0.5) * 1.45
-    const jitterY = (randomAt(seed, index * 2 + 1) - 0.5) * 1.45
-    const x = point.x + jitterX
-    const y = point.y + jitterY
-    context.quadraticCurveTo(x, y, (x + next.x) / 2, (y + next.y) / 2)
+function drawFields(context: CanvasRenderingContext2D, width: number, height: number, transform: WorldTransform): void {
+  for (const beat of proofBeats) {
+    if (!visible(transform, beat.start, beat.end, .025)) continue
+    const top = viewY(beat.start - .012, transform); const bottom = viewY(beat.end + .012, transform)
+    const gradient = context.createLinearGradient(0, top, 0, bottom); gradient.addColorStop(0, 'rgba(0,0,0,0)'); gradient.addColorStop(.15, fieldColor(beat)); gradient.addColorStop(.86, fieldColor(beat)); gradient.addColorStop(1, 'rgba(0,0,0,0)')
+    context.fillStyle = gradient; context.fillRect(0, Math.max(-height, top), width, Math.min(height * 3, bottom - top))
+    if (beat.field.kind === 'meeting') { const split = context.createLinearGradient(0, 0, width, 0); split.addColorStop(0, 'rgba(188,118,94,.15)'); split.addColorStop(.5, 'rgba(212,181,106,.035)'); split.addColorStop(1, 'rgba(82,106,147,.16)'); context.fillStyle = split; context.fillRect(0, top, width, bottom - top) }
   }
-  const last = points[points.length - 1]
-  context.lineTo(last.x, last.y)
-  context.stroke()
+}
+
+function drawPaper(context: CanvasRenderingContext2D, width: number, height: number, transform: WorldTransform, night: number, fast: boolean): void {
+  context.save(); context.strokeStyle = ink(night, .065); context.lineWidth = .55
+  const count = fast ? 120 : FIBERS.length
+  for (let index = 0; index < count; index += 1) { const fiber = FIBERS[index]; const y = (transform.scrollY * .12 + fiber.y * height * 2.1) % (height + 80) - 40; context.globalAlpha = fiber.alpha; line(context, fiber.x * width, y, fiber.x * width + Math.cos(fiber.angle) * fiber.length, y + Math.sin(fiber.angle) * fiber.length, index) }
   context.restore()
 }
 
-function fauxGlyph(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  length: number,
-  color: string,
-  alpha: number,
-  seed: number,
-  restless: number,
-): void {
-  const segments = 3 + Math.floor(randomAt(seed, 3) * 5)
-  const points: Point[] = []
-  const slant = (randomAt(seed, 8) - 0.5) * 7
-  for (let index = 0; index <= segments; index += 1) {
-    const t = index / segments
-    const tremor = fractalNoise1D(t * 4 + restless * 0.29, seed + 73, 2) * (1.2 + randomAt(seed, 9) * 2.8)
-    points.push({ x: x + t * length + slant * t, y: y + tremor + Math.sin(t * Math.PI * 2.1 + seed) * 1.8 })
-  }
-  organicStroke(context, points, color, 0.55 + randomAt(seed, 2) * 0.72, alpha, seed)
-  if (randomAt(seed, 12) > 0.72) {
-    context.fillStyle = rgba(color, alpha * 0.72)
-    context.beginPath()
-    context.arc(x + length * randomAt(seed, 19), y + 5 + randomAt(seed, 20) * 3, 0.7, 0, Math.PI * 2)
-    context.fill()
-  }
+function clipAssetReveal(context: CanvasRenderingContext2D, mark: AssetProofMark, width: number, height: number, reveal: number): void {
+  if (reveal >= .997) return
+  const random = createSeededRandom(`proof-mask/${mark.id}`); context.beginPath()
+  if (mark.reveal === 'stroke') {
+    const bands = 8; const exposed = Math.max(1, Math.ceil(bands * reveal))
+    for (let band = 0; band < exposed; band += 1) { const y = height * band / bands; context.rect(-width / 2 - 4, -height / 2 + y - 3 + (random() - .5) * 9, width * (.22 + reveal * .86), height / bands + 9) }
+  } else if (mark.reveal === 'dust') {
+    const points = Math.ceil(26 + reveal * 120)
+    for (let point = 0; point < points; point += 1) { const radius = Math.max(5, width * (.025 + random() * .08) * reveal); context.moveTo((random() - .5) * width + radius, (random() - .5) * height); context.arc((random() - .5) * width, (random() - .5) * height, radius, 0, Math.PI * 2) }
+  } else { context.ellipse(0, 0, Math.max(2, width * (.08 + reveal * .54)), Math.max(2, height * (.13 + reveal * .52)), -.17, 0, Math.PI * 2) }
+  context.clip()
 }
 
-function drawBackdrop(
-  context: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  progress: number,
-  fastScroll: boolean,
-): void {
-  const background = backgroundAt(progress)
-  context.fillStyle = background
-  context.fillRect(0, 0, width, height)
-
-  if (fastScroll) return
-
-  const night = nightAt(progress)
-  const glow = context.createRadialGradient(width * 0.51, height * 0.52, 0, width * 0.51, height * 0.52, Math.max(width, height) * 0.68)
-  glow.addColorStop(0, rgba(night > 0.5 ? COLORS.blue : COLORS.gold, 0.035 + night * 0.02))
-  glow.addColorStop(0.5, rgba(COLORS.copper, night > 0.5 ? 0.012 : 0.018))
-  glow.addColorStop(1, rgba(COLORS.ink, 0))
-  context.fillStyle = glow
-  context.fillRect(0, 0, width, height)
+function drawAssetMarks(context: CanvasRenderingContext2D, images: AssetImages, layer: AssetProofMark['layer'], width: number, height: number, transform: WorldTransform, maxRevealY: number, reduced: boolean, progress: number): void {
+  const compact = width < 720; const dissolve = getMotifState(progress).dissolution
+  for (const mark of assetProofMarks.filter((candidate) => candidate.layer === layer).sort((a, b) => a.order - b.order)) {
+    const image = images[mark.assetId]; if (!image?.complete || !image.naturalWidth) continue
+    const definition = assetDefinitions[mark.assetId]; const source = definition.crops[mark.cropId]; if (!source) continue
+    const placement = compact ? mark.mobile : mark; const drawWidth = width * placement.width; const cropAspect = definition.aspect * source.width / source.height; const drawHeight = drawWidth / cropAspect
+    const yProgress = mark.y + (compact ? (mark.mobile.yOffset ?? 0) / 100 : 0); const y = viewY(yProgress, transform)
+    if (y + drawHeight < -90 || y > height + 90) continue
+    const reveal = reduced ? 1 : revealed(mark.y + mark.order * .00045, maxRevealY, 260); if (reveal <= .002) continue
+    const x = width * placement.x; const rotation = ((compact && mark.mobile.rotation !== undefined) ? mark.mobile.rotation : mark.rotation) * Math.PI / 180
+    const finalFade = mark.beatId === 'plate-lift' ? 1 - dissolve : 1
+    context.save(); context.translate(x + drawWidth / 2, y + drawHeight / 2); context.rotate(rotation); clipAssetReveal(context, mark, drawWidth, drawHeight, reveal)
+    context.globalAlpha = mark.opacity * (.2 + reveal * .8) * finalFade; context.globalCompositeOperation = mark.blend === 'normal' ? 'source-over' : mark.blend
+    context.drawImage(image, source.x * image.naturalWidth, source.y * image.naturalHeight, source.width * image.naturalWidth, source.height * image.naturalHeight, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight); context.restore()
+  }
+  context.globalAlpha = 1; context.globalCompositeOperation = 'source-over'
 }
 
-function drawField(
-  context: CanvasRenderingContext2D,
-  transform: WorldTransform,
-  width: number,
-  maxRevealY: number,
-  progress: number,
-  restless: number,
-  mobile: boolean,
-  fastScroll: boolean,
-): void {
-  const visible = getVisibleWorldRange(transform, 90)
-  const night = nightAt(progress)
-  const stride = fastScroll ? 5 : mobile ? 2 : 1
-  for (let index = 0; index < FIELD_MARKS.length; index += stride) {
-    const mark = FIELD_MARKS[index]
-    if (mark.y < visible.start || mark.y > visible.end) continue
-    const reveal = markReveal(mark.y, maxRevealY, 190)
-    if (reveal <= 0.002) continue
-    const y = worldToViewportY(mark.y, transform)
-    const chapter = passageAt(mark.y / WORLD_HEIGHT).index
-    const sideColor = mark.x < 0.46 ? COLORS.copper : mark.x > 0.54 ? COLORS.blue : COLORS.ink
-    const color = night > 0.5 ? COLORS.nightInk : sideColor
-    const density = chapter === 1 || chapter === 3 || chapter === 4 ? 1 : chapter === 8 ? 0.62 : 0.46
-    if (randomAt(mark.seed, 31) > density) continue
-    fauxGlyph(context, mark.x * width, y, mark.length * (mobile ? 0.78 : 1), color, reveal * (0.07 + density * 0.085), mark.seed, restless)
-  }
+function asemicRow(context: CanvasRenderingContext2D, random: () => number, from: number, to: number, y: number, color: string, scale = 1): void {
+  context.strokeStyle = color; context.lineWidth = .7 * scale; let x = from
+  while (x < to) { const length = (3 + random() * 8) * scale; const rise = (random() - .5) * 7 * scale; context.beginPath(); context.moveTo(x, y); context.quadraticCurveTo(x + length * .45, y - 3 * scale + rise, x + length, y + rise * .25); context.stroke(); x += length + (2 + random() * 5) * scale }
+}
 
-  context.save()
-  context.lineWidth = 0.45
-  for (let index = 0; index < 58; index += 1) {
-    const x = randomAt('paper-fiber-x', index) * width
-    const y = ((randomAt('paper-fiber-y', index) * transform.viewportHeight + transform.scrollY * (0.014 + index % 3 * 0.006)) % (transform.viewportHeight + 90)) - 45
-    context.strokeStyle = rgba(night > 0.5 ? COLORS.nightInk : COLORS.ink, night > 0.5 ? 0.018 : 0.025)
-    context.beginPath()
-    context.moveTo(x, y)
-    context.lineTo(x + 28 + randomAt(index, 3) * 68, y + (randomAt(index, 8) - 0.5) * 4)
-    context.stroke()
-  }
+function drawPressure(context: CanvasRenderingContext2D, width: number, transform: WorldTransform, maxRevealY: number, now: number, reduced: boolean): void {
+  const y = viewY(.023, transform); const alpha = revealed(.004, maxRevealY); const breath = reduced ? 0 : Math.sin(now * .001) * 2
+  context.save(); context.globalAlpha = alpha; context.strokeStyle = 'rgba(138,126,108,.18)'; context.lineWidth = .8
+  for (let ring = 0; ring < 7; ring += 1) { const inset = 18 + ring * 18 + breath; context.strokeRect(width * .5 - inset, y - inset * .62, inset * 2, inset * 1.24) }
+  context.strokeStyle = 'rgba(188,118,94,.35)'; line(context, width * .5 - 25, y, width * .5 + 25, y, 1); line(context, width * .5, y - 25, width * .5, y + 25, 2); context.restore()
+}
+
+function drawType(context: CanvasRenderingContext2D, width: number, height: number, transform: WorldTransform, maxRevealY: number): void {
+  const random = createSeededRandom('borrowed-type-field'); context.save()
+  for (let progress = .049; progress <= .132; progress += .0028) { const y = viewY(progress, transform); if (y < -30 || y > height + 30) continue; const local = Math.abs((progress - .092) / .043); const gap = local < 1 ? width * (.07 + (1 - local) * .15) : 0; const center = width * (.47 + Math.sin(progress * 110) * .02); const alpha = revealed(progress, maxRevealY) * (.13 + random() * .18); asemicRow(context, random, 8, gap ? center - gap : width - 8, y, `rgba(37,36,42,${alpha})`, .74); if (gap) asemicRow(context, random, center + gap, width - 8, y, progress % .011 < .003 ? 'rgba(82,106,147,.25)' : `rgba(37,36,42,${alpha})`, .74) }
   context.restore()
 }
 
-function interpolatedGap(progress: number, width: number): number {
-  const keys: Array<[number, number]> = [
-    [0, 0.3], [0.06, 0.245], [0.15, 0.19], [0.23, 0.17], [0.34, 0.135], [0.44, 0.105],
-    [0.53, 0.09], [0.63, 0.13], [0.7, 0.16], [0.79, 0.105], [0.88, 0.066], [0.94, 0.024], [1, 0.004],
-  ]
-  for (let index = 0; index < keys.length - 1; index += 1) {
-    const current = keys[index]
-    const next = keys[index + 1]
-    if (progress <= next[0]) {
-      const t = smoothstep(current[0], next[0], progress)
-      return lerp(current[1], next[1], t) * width
-    }
-  }
-  return width * keys[keys.length - 1][1]
+function drawReverse(context: CanvasRenderingContext2D, width: number, transform: WorldTransform, maxRevealY: number): void {
+  context.save(); context.globalAlpha = revealed(.13, maxRevealY); context.strokeStyle = 'rgba(82,106,147,.18)'; context.lineWidth = .75; const top = viewY(.132, transform); const bottom = viewY(.202, transform)
+  context.strokeRect(width * .36, top, width * .48, bottom - top); context.setLineDash([4, 11]); line(context, width * .6, top - 30, width * .6, bottom + 30, 4); context.setLineDash([])
+  for (let row = 0; row < 16; row += 1) line(context, width * .4, top + row * (bottom - top) / 16, width * (.48 + Math.sin(row) * .04), top + row * (bottom - top) / 16, row)
+  context.restore()
 }
 
-function signalPosition(
-  progress: number,
-  width: number,
-  side: -1 | 1,
-  time: number,
-  reducedMotion: boolean,
-): number {
-  const center = width * (0.5 + fractalNoise1D(progress * 10, 'shared-center', 3) * 0.055)
-  const gap = interpolatedGap(progress, width)
-  const fear = rangeWeight(progress, 0.53, 0.635, 0.012)
-  const conversation = rangeWeight(progress, 0.43, 0.545, 0.015)
-  const life = reducedMotion ? 0 : time * 0.0001
-  const slowNoise = fractalNoise1D(progress * 42 + life, side < 0 ? 'copper-thread' : 'blue-thread', 3)
-  const amplitude = width * lerp(0.018, 0.004, fear)
-  const braid = Math.sin((progress - 0.44) / 0.09 * Math.PI * 4) * width * 0.019 * conversation * side
-  return center + side * gap + slowNoise * amplitude + braid
+function drawTransfer(context: CanvasRenderingContext2D, width: number, height: number, transform: WorldTransform, maxRevealY: number, now: number, reduced: boolean): void {
+  const random = createSeededRandom('transfer-field'); context.save(); context.strokeStyle = 'rgba(82,106,147,.25)'; context.lineWidth = .7
+  for (let index = 0; index < 190; index += 1) { const progress = .195 + random() * .085; const y = viewY(progress, transform); if (y < -50 || y > height + 50) continue; const x = width * (.48 + random() * .5); const tremor = reduced ? 0 : Math.sin(now * .0008 + index) * .7; context.globalAlpha = revealed(progress, maxRevealY) * (.08 + random() * .22); context.beginPath(); context.moveTo(x, y); context.lineTo(x - 2 + tremor, y + 8 + random() * 28); context.stroke() }
+  context.globalAlpha = revealed(.255, maxRevealY) * .28; context.strokeStyle = 'rgba(37,36,42,.3)'; for (let row = 0; row < 8; row += 1) line(context, width * .08, viewY(.25 + row * .0022, transform), width * (.42 + row * .035), viewY(.25 + row * .0022, transform), row)
+  context.restore()
 }
 
-function drawSignals(
-  context: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  transform: WorldTransform,
-  maxRevealY: number,
-  time: number,
-  reducedMotion: boolean,
-  pointer: TrailPoint | undefined,
-  fastScroll: boolean,
-): void {
-  const step = fastScroll ? 32 : width < 700 ? 14 : 10
-  const copper: Point[] = []
-  const blue: Point[] = []
-  const gold: Point[] = []
-  let goldStrength = 0
-  for (let y = -step; y <= height + step; y += step) {
-    const worldY = Math.max(0, Math.min(WORLD_HEIGHT, transform.scrollY / transform.documentHeight * WORLD_HEIGHT + y / transform.documentHeight * WORLD_HEIGHT))
-    const progress = worldY / WORLD_HEIGHT
-    const reveal = markReveal(worldY, maxRevealY, 230)
-    let copperX = signalPosition(progress, width, -1, time, reducedMotion)
-    let blueX = signalPosition(progress, width, 1, time, reducedMotion)
-    if (pointer && !reducedMotion) {
-      const dy = y - pointer.y
-      const radius = Math.min(width, height) * 0.19
-      const proximity = Math.exp(-(dy * dy) / (radius * radius))
-      const middle = (copperX + blueX) / 2
-      const direction = pointer.x < middle ? -1 : 1
-      copperX += direction * proximity * 4.2
-      blueX += direction * proximity * 3.4
-    }
-    copper.push({ x: copperX, y })
-    blue.push({ x: blueX, y })
+function drawMisregistration(context: CanvasRenderingContext2D, width: number, transform: WorldTransform, maxRevealY: number): void {
+  const alpha = revealed(.28, maxRevealY); context.save(); context.globalAlpha = alpha; const y = viewY(.342, transform)
+  for (let item = 0; item < 12; item += 1) { const x = width * (.05 + item * .075); const drift = Math.max(0, item - 5) * 2.4; context.fillStyle = 'rgba(188,118,94,.25)'; context.fillRect(x - drift, y + Math.sin(item) * 9, 24, 24); context.fillStyle = 'rgba(82,106,147,.25)'; context.fillRect(x + drift, y + Math.sin(item) * 9 + drift * .3, 24, 24) }
+  context.restore()
+}
 
-    const harmony = Math.max(
-      rangeWeight(progress, 0.445, 0.535, 0.014),
-      rangeWeight(progress, 0.79, 0.885, 0.014),
-      rangeWeight(progress, 0.885, 0.952, 0.01) * 0.74,
-    ) * reveal
-    goldStrength = Math.max(goldStrength, harmony)
-    gold.push({
-      x: (copperX + blueX) / 2 + Math.sin(progress * 190 + (reducedMotion ? 0 : time * 0.0002)) * width * 0.009 * harmony,
-      y,
-    })
-  }
+function drawCurrent(context: CanvasRenderingContext2D, width: number, height: number, transform: WorldTransform, maxRevealY: number): void {
+  const random = createSeededRandom('many-proofs-current'); context.save(); context.globalAlpha = revealed(.36, maxRevealY)
+  for (let index = 0; index < 520; index += 1) { const t = random(); const progress = .36 + t * .07 + (random() - .5) * .018; const y = viewY(progress, transform); if (y < -30 || y > height + 30) continue; const x = width * (.02 + t * .96 + (random() - .5) * .18); const length = 2 + random() * 10; context.strokeStyle = index % 11 === 0 ? 'rgba(188,118,94,.45)' : index % 17 === 0 ? 'rgba(82,106,147,.42)' : 'rgba(37,36,42,.26)'; context.lineWidth = .65; line(context, x, y, x + length, y - length * .25, index) }
+  context.restore()
+}
 
-  const centerWorldY = (transform.scrollY + height * 0.5) / transform.documentHeight * WORLD_HEIGHT
-  const reveal = markReveal(centerWorldY, maxRevealY, 230)
-  const centerProgress = centerWorldY / WORLD_HEIGHT
-  const night = nightAt(centerProgress)
-  const baseAlpha = reveal * (0.48 + night * 0.18)
-  if (fastScroll) {
-    const quickStroke = (points: readonly Point[], color: string) => {
-      context.strokeStyle = rgba(color, baseAlpha)
-      context.lineWidth = 1.35
-      context.lineCap = 'round'
-      context.beginPath()
-      context.moveTo(points[0].x, points[0].y)
-      for (let index = 1; index < points.length; index += 1) context.lineTo(points[index].x, points[index].y)
-      context.stroke()
-    }
-    quickStroke(copper, COLORS.copper)
-    quickStroke(blue, COLORS.blue)
-    if (goldStrength > 0.08) quickStroke(gold, COLORS.gold)
-    return
+function drawPractice(context: CanvasRenderingContext2D, width: number, transform: WorldTransform, maxRevealY: number): void {
+  context.save(); context.globalAlpha = revealed(.43, maxRevealY); context.strokeStyle = 'rgba(37,36,42,.2)'; context.lineWidth = .7; const top = viewY(.435, transform); const bottom = viewY(.5, transform); const panels = 9
+  context.beginPath(); context.moveTo(width * .04, top)
+  for (let panel = 0; panel <= panels; panel += 1) { const x = width * (.04 + panel * .102); const y = top + (panel % 2 ? 28 : 0); context.lineTo(x, y); context.lineTo(x, bottom - (panel % 2 ? 20 : 0)); if (panel < panels) { const cx = x + width * .05; context.strokeStyle = panel > 6 ? 'rgba(188,118,94,.35)' : 'rgba(82,106,147,.23)'; ellipse(context, cx + Math.max(0, panel - 5) * 7, (top + bottom) / 2, 6 + panel * 2.6, 5 + panel * 1.4, panel * .07) } }
+  context.strokeStyle = 'rgba(37,36,42,.2)'; context.stroke(); context.restore()
+}
+
+function drawMeeting(context: CanvasRenderingContext2D, width: number, transform: WorldTransform, maxRevealY: number): void {
+  context.save(); context.globalAlpha = revealed(.5, maxRevealY); const centerY = viewY(.55, transform)
+  for (let row = -11; row <= 11; row += 1) { context.strokeStyle = 'rgba(188,118,94,.24)'; line(context, 0, centerY + row * 25, width * .49, centerY + row * 17, row); context.strokeStyle = 'rgba(82,106,147,.26)'; line(context, width, centerY + row * 25, width * .51, centerY + row * 17, row + 40) }
+  context.strokeStyle = 'rgba(212,181,106,.48)'; context.lineWidth = 1; for (let route = 0; route < 7; route += 1) { context.beginPath(); context.moveTo(width * .46, centerY - 70 + route * 22); context.bezierCurveTo(width * (.49 + route * .002), centerY - 30, width * (.51 - route * .002), centerY + 35, width * .54, centerY + 65 - route * 17); context.stroke() }
+  context.restore()
+}
+
+function drawCertainty(context: CanvasRenderingContext2D, width: number, height: number, transform: WorldTransform, maxRevealY: number): void {
+  context.save(); context.globalAlpha = revealed(.59, maxRevealY); context.strokeStyle = 'rgba(232,225,211,.22)'; context.lineWidth = .65; const startX = width * .4; const startY = viewY(.595, transform); const cell = Math.min(78, width * .09)
+  for (let row = 0; row < 8; row += 1) for (let column = 0; column < 7; column += 1) { const x = startX + column * cell; const y = startY + row * 54; if (y < -60 || y > height + 60) continue; const wrong = row === 5 && column === 4; context.strokeStyle = wrong ? 'rgba(212,181,106,.7)' : 'rgba(232,225,211,.2)'; context.strokeRect(x, y, cell - 8, 42); line(context, x + 8, y + 21, x + cell - 16, y + 21, row + column) }
+  context.strokeStyle = 'rgba(212,181,106,.5)'; context.setLineDash([2, 10]); context.beginPath(); context.moveTo(width * .67, viewY(.59, transform)); context.bezierCurveTo(width * .8, viewY(.61, transform), width * .72, viewY(.65, transform), width * .49, viewY(.67, transform)); context.stroke(); context.restore()
+}
+
+function drawScrape(context: CanvasRenderingContext2D, width: number, height: number, transform: WorldTransform, maxRevealY: number): void {
+  const random = createSeededRandom('scraped-plate'); context.save(); context.globalAlpha = revealed(.67, maxRevealY); const center = viewY(.704, transform)
+  context.strokeStyle = 'rgba(232,225,211,.34)'; context.lineWidth = 1.2; for (let cut = 0; cut < 19; cut += 1) line(context, -30, center - 65 + cut * 8, width * (.62 + random() * .35), center - 110 + cut * 12 + random() * 16, cut)
+  context.fillStyle = 'rgba(188,118,94,.38)'; for (let point = 0; point < 220; point += 1) { const x = width * (.48 + random() * .48); const y = center - 120 + random() * 270; context.beginPath(); context.arc(x, y, .4 + random() * 1.8, 0, Math.PI * 2); context.fill() }
+  context.restore()
+}
+
+function drawEdition(context: CanvasRenderingContext2D, width: number, height: number, transform: WorldTransform, maxRevealY: number, now: number, reduced: boolean): void {
+  const random = createSeededRandom('unprinted-edition'); context.save(); context.globalAlpha = revealed(.74, maxRevealY)
+  for (let plate = 0; plate < 13; plate += 1) { const progress = .742 + plate * .0066; const y = viewY(progress, transform); if (y < -160 || y > height + 160) continue; const drift = reduced ? 0 : Math.sin(now * .00025 + plate) * 7; const x = width * (.05 + (plate % 5) * .19) + drift; const w = width * (.2 + (plate % 3) * .04); const h = 95 + (plate % 4) * 28; context.strokeStyle = plate % 2 ? 'rgba(82,106,147,.2)' : 'rgba(232,225,211,.17)'; context.setLineDash(plate % 3 === 0 ? [3, 9] : []); context.strokeRect(x, y, w, h); context.setLineDash([]); for (let route = 0; route < 4; route += 1) line(context, x + 13, y + 18 + route * 17, x + w * (.45 + random() * .45), y + 18 + route * 17 + (random() - .5) * 9, route + plate) }
+  context.restore()
+}
+
+function drawInspection(context: CanvasRenderingContext2D, width: number, height: number, transform: WorldTransform, maxRevealY: number, now: number, reduced: boolean): void {
+  context.save(); context.globalAlpha = revealed(.83, maxRevealY); const x = width * .68; const y = viewY(.868, transform); const pulse = reduced ? 0 : Math.sin(now * .001) * 4
+  const glow = context.createRadialGradient(x, y, 5, x, y, Math.min(width * .25, 250 + pulse)); glow.addColorStop(0, 'rgba(212,181,106,.32)'); glow.addColorStop(.28, 'rgba(212,181,106,.12)'); glow.addColorStop(1, 'rgba(212,181,106,0)'); context.fillStyle = glow; context.fillRect(x - 300, y - 300, 600, 600)
+  context.strokeStyle = 'rgba(232,225,211,.24)'; context.lineWidth = .75; for (let route = 0; route < 12; route += 1) { context.beginPath(); context.moveTo(width * .08, y + (route - 6) * 30); context.bezierCurveTo(width * .34, y + Math.sin(route) * 90, width * .48, y + Math.cos(route * 2) * 80, x + (route - 6) * 9, y + (route - 6) * 7); context.stroke() }
+  context.restore()
+}
+
+function drawContact(context: CanvasRenderingContext2D, width: number, transform: WorldTransform, maxRevealY: number): void {
+  context.save(); context.globalAlpha = revealed(.9, maxRevealY); const y = viewY(.927, transform); const sizes = [95, 55]
+  sizes.forEach((size, index) => { const x = width * (.46 + index * .07); context.strokeStyle = index ? 'rgba(82,106,147,.46)' : 'rgba(188,118,94,.46)'; context.lineWidth = .9; line(context, x - size, y, x + size, y, index); line(context, x, y - size, x, y + size, index + 2) })
+  context.strokeStyle = 'rgba(232,225,211,.12)'; for (let row = -5; row <= 5; row += 1) line(context, width * .08, y + row * 33, width * .92, y + row * 33 + Math.sin(row) * 5, row)
+  context.restore()
+}
+
+function drawLift(context: CanvasRenderingContext2D, width: number, height: number, transform: WorldTransform, maxRevealY: number, progress: number): void {
+  const local = clamp((progress - .95) / .05); const dissolve = getMotifState(progress).dissolution; context.save(); context.globalAlpha = revealed(.95, maxRevealY) * (1 - dissolve)
+  const centerY = viewY(.968, transform); const colors = ['rgba(188,118,94,.36)', 'rgba(82,106,147,.38)', 'rgba(212,181,106,.32)', 'rgba(232,225,211,.2)']
+  for (let channel = 0; channel < 12; channel += 1) { const x = width * (.28 + channel * .04); const lift = Math.max(0, local - .55) * height * (1 + channel * .04); context.strokeStyle = colors[channel % colors.length]; context.lineWidth = 1; context.beginPath(); context.moveTo(x, centerY + 180); context.bezierCurveTo(x + Math.sin(channel) * 60, centerY + 70, x + Math.cos(channel) * 70, centerY - 90 - lift, x + (channel - 6) * 5, centerY - 240 - lift); context.stroke() }
+  context.restore()
+}
+
+function drawStage(context: CanvasRenderingContext2D, stage: ProofStage, width: number, height: number, transform: WorldTransform, maxRevealY: number, now: number, reduced: boolean, progress: number): void {
+  switch (stage) {
+    case 'pressure': drawPressure(context, width, transform, maxRevealY, now, reduced); break
+    case 'type': drawType(context, width, height, transform, maxRevealY); break
+    case 'reverse': drawReverse(context, width, transform, maxRevealY); break
+    case 'transfer': drawTransfer(context, width, height, transform, maxRevealY, now, reduced); break
+    case 'misregister': drawMisregistration(context, width, transform, maxRevealY); break
+    case 'current': drawCurrent(context, width, height, transform, maxRevealY); break
+    case 'practice': drawPractice(context, width, transform, maxRevealY); break
+    case 'meeting': drawMeeting(context, width, transform, maxRevealY); break
+    case 'certainty': drawCertainty(context, width, height, transform, maxRevealY); break
+    case 'scrape': drawScrape(context, width, height, transform, maxRevealY); break
+    case 'edition': drawEdition(context, width, height, transform, maxRevealY, now, reduced); break
+    case 'inspection': drawInspection(context, width, height, transform, maxRevealY, now, reduced); break
+    case 'contact': drawContact(context, width, transform, maxRevealY); break
+    case 'lift': drawLift(context, width, height, transform, maxRevealY, progress); break
   }
-  const signalOffsets = fastScroll ? [0] : [-4.5, 0, 4.5]
-  for (const offset of signalOffsets) {
-    organicStroke(context, copper.map((point) => ({ x: point.x + offset, y: point.y })), COLORS.copper, offset === 0 ? 1.45 : 0.5, baseAlpha * (offset === 0 ? 1 : 0.24), 311 + offset)
-    organicStroke(context, blue.map((point) => ({ x: point.x - offset, y: point.y })), COLORS.blue, offset === 0 ? 1.45 : 0.5, baseAlpha * (offset === 0 ? 1 : 0.24), 421 + offset)
-  }
-  if (goldStrength > 0.005) {
-    context.save()
-    context.shadowColor = rgba(COLORS.gold, goldStrength * 0.75)
-    context.shadowBlur = 13 * goldStrength
-    organicStroke(context, gold, COLORS.gold, 1.15, goldStrength * 0.72, 557)
+}
+
+function drawMicroStudies(context: CanvasRenderingContext2D, width: number, height: number, transform: WorldTransform, maxRevealY: number, night: number): void {
+  for (const beat of proofBeats) {
+    if (!visible(transform, beat.start, beat.end)) continue
+    const random = createSeededRandom(`micro/${beat.id}`); context.save(); context.lineWidth = .62
+    for (let index = 0; index < beat.microStudyCount; index += 1) { const progress = beat.start + (beat.end - beat.start) * (.08 + random() * .84); const y = viewY(progress, transform); if (y < -50 || y > height + 50) continue; const x = width * (.03 + random() * .94); const scale = .55 + random() * .9; context.globalAlpha = revealed(progress, maxRevealY) * (.18 + random() * .2); context.strokeStyle = index % 5 === 0 ? 'rgba(188,118,94,.5)' : index % 7 === 0 ? 'rgba(82,106,147,.48)' : ink(night, .5); if (index % 4 === 0) { line(context, x - 10 * scale, y, x + 10 * scale, y, index); line(context, x, y - 10 * scale, x, y + 10 * scale, index + 1) } else if (index % 4 === 1) { context.strokeRect(x - 8 * scale, y - 6 * scale, 16 * scale, 12 * scale) } else if (index % 4 === 2) { context.setLineDash([2, 6]); line(context, x - 17 * scale, y + 7, x + 17 * scale, y - 7, index); context.setLineDash([]) } else ellipse(context, x, y, 4 * scale, 2 * scale, random()) }
     context.restore()
   }
 }
 
-function localProgress(worldY: number, start: number, end: number): number {
-  return clamp((worldY / WORLD_HEIGHT - start) / (end - start))
-}
-
-function visiblePassage(
-  transform: WorldTransform,
-  start: number,
-  end: number,
-  overscan = 0.02,
-): boolean {
-  const visible = getVisibleWorldRange(transform, 120)
-  return visible.end >= (start - overscan) * WORLD_HEIGHT && visible.start <= (end + overscan) * WORLD_HEIGHT
-}
-
-function passageY(progress: number, transform: WorldTransform): number {
-  return worldToViewportY(progress * WORLD_HEIGHT, transform)
-}
-
-function revealFor(progress: number, maxRevealY: number): number {
-  return markReveal(progress * WORLD_HEIGHT, maxRevealY, 220)
-}
-
-function drawFirstPressure(
-  context: CanvasRenderingContext2D,
-  width: number,
-  transform: WorldTransform,
-  maxRevealY: number,
-): void {
-  if (!visiblePassage(transform, 0, 0.08)) return
-  const centerY = passageY(0.037, transform)
-  const alpha = revealFor(0.037, maxRevealY)
-  const centerX = width * 0.5
-  context.save()
-  for (let ring = 0; ring < 9; ring += 1) {
-    const radiusX = width * (0.06 + ring * 0.032)
-    const radiusY = 18 + ring * 12
-    context.strokeStyle = rgba(ring % 2 === 0 ? COLORS.copper : COLORS.blue, alpha * (0.11 - ring * 0.007))
-    context.lineWidth = 0.7
-    context.beginPath()
-    context.ellipse(centerX, centerY, radiusX, radiusY, (ring - 4) * 0.025, 0.13 * Math.PI, 0.87 * Math.PI)
-    context.stroke()
-    context.beginPath()
-    context.ellipse(centerX, centerY, radiusX, radiusY, (ring - 4) * -0.025, 1.13 * Math.PI, 1.87 * Math.PI)
-    context.stroke()
-  }
-  context.fillStyle = rgba(COLORS.copper, alpha * 0.62)
-  context.fillRect(centerX - width * 0.19, centerY - 1, 7, 1.4)
-  context.fillStyle = rgba(COLORS.blue, alpha * 0.62)
-  context.fillRect(centerX + width * 0.19 - 7, centerY + 1, 7, 1.4)
+function drawInspectionOverlay(context: CanvasRenderingContext2D, width: number, height: number, pointerX: number, pointerY: number, pointerActive: boolean, progress: number): void {
+  if (!pointerActive || progress >= .995) return
+  context.save(); const radius = width < 720 ? 150 : 205; const gradient = context.createRadialGradient(pointerX * width, pointerY * height, 3, pointerX * width, pointerY * height, radius); gradient.addColorStop(0, 'rgba(255,248,219,.13)'); gradient.addColorStop(.55, 'rgba(212,181,106,.055)'); gradient.addColorStop(1, 'rgba(212,181,106,0)'); context.fillStyle = gradient; context.fillRect(0, 0, width, height)
+  const random = createSeededRandom(`inspection/${Math.floor(progress * 14)}`); context.strokeStyle = progress > .59 ? 'rgba(232,225,211,.2)' : 'rgba(37,36,42,.2)'; context.lineWidth = .65
+  for (let index = 0; index < 18; index += 1) { const angle = random() * Math.PI * 2; const distance = random() * radius * .72; const x = pointerX * width + Math.cos(angle) * distance; const y = pointerY * height + Math.sin(angle) * distance; line(context, x - 12, y, x + 12 + random() * 25, y + (random() - .5) * 8, index) }
   context.restore()
 }
 
-function drawLanguageSediment(
-  context: CanvasRenderingContext2D,
-  width: number,
-  transform: WorldTransform,
-  maxRevealY: number,
-  restless: number,
-): void {
-  if (!visiblePassage(transform, 0.05, 0.17)) return
-  for (let row = 0; row < 36; row += 1) {
-    const p = 0.061 + row / 35 * 0.098
-    const y = passageY(p, transform)
-    if (y < -50 || y > transform.viewportHeight + 50) continue
-    const reveal = revealFor(p, maxRevealY)
-    const indent = randomAt('language-indent', row) * width * 0.13
-    const segments = 5 + Math.floor(randomAt('language-segments', row) * 7)
-    for (let segment = 0; segment < segments; segment += 1) {
-      const side = row % 3 === 0 ? -1 : segment % 2 === 0 ? -1 : 1
-      const base = side < 0 ? width * 0.06 + indent : width * 0.55 + indent * 0.35
-      const x = base + segment / segments * width * 0.35
-      const color = side < 0 ? COLORS.copper : COLORS.blue
-      fauxGlyph(context, x, y, 9 + randomAt(row * 31, segment) * 33, color, reveal * 0.21, row * 83 + segment, restless)
-    }
-    context.strokeStyle = rgba(COLORS.ink, reveal * 0.045)
-    context.lineWidth = 0.45
-    context.beginPath()
-    context.moveTo(width * 0.04, y + 7)
-    context.lineTo(width * 0.96, y + 7 + (randomAt(row, 1) - 0.5) * 3)
-    context.stroke()
-  }
+function drawUnderWorld(context: CanvasRenderingContext2D, images: AssetImages, width: number, height: number, transform: WorldTransform, maxRevealY: number, now: number, reduced: boolean, progress: number, velocity: number): void {
+  const profile = interpolateProofProfiles(progress).visual; drawBackdrop(context, width, height, progress); drawFields(context, width, height, transform); drawPaper(context, width, height, transform, profile.night, velocity > .65)
+  for (const beat of proofBeats) if (visible(transform, beat.start, beat.end, .02)) drawStage(context, beat.stage, width, height, transform, maxRevealY, now, reduced, progress)
+  drawAssetMarks(context, images, 'under', width, height, transform, maxRevealY, reduced, progress); drawMicroStudies(context, width, height, transform, maxRevealY, profile.night)
+  const dissolution = getMotifState(progress).dissolution
+  if (dissolution > 0) { context.fillStyle = `rgba(0,0,0,${smoothstep(0, 1, dissolution)})`; context.fillRect(0, 0, width, height) }
 }
 
-function drawDrafts(
-  context: CanvasRenderingContext2D,
-  width: number,
-  transform: WorldTransform,
-  maxRevealY: number,
-  restless: number,
-): void {
-  if (!visiblePassage(transform, 0.14, 0.25)) return
-  const columns = width < 700 ? 3 : 5
-  const rows = width < 700 ? 5 : 3
-  for (let index = 0; index < columns * rows; index += 1) {
-    const column = index % columns
-    const row = Math.floor(index / columns)
-    const p = 0.158 + row / Math.max(1, rows - 1) * 0.074 + (column % 2) * 0.004
-    const y = passageY(p, transform)
-    if (y < -180 || y > transform.viewportHeight + 180) continue
-    const x = width * (0.11 + column / Math.max(1, columns - 1) * 0.78)
-    const reveal = revealFor(p, maxRevealY)
-    const size = width < 700 ? 34 : 48
-    const points: Point[] = []
-    const sides = 7
-    for (let side = 0; side <= sides; side += 1) {
-      const angle = side / sides * Math.PI * 2
-      const mutation = fractalNoise1D(side * 0.7 + restless * 0.06, index + 901, 2) * size * 0.14
-      points.push({
-        x: x + Math.cos(angle) * (size + mutation),
-        y: y + Math.sin(angle) * (size * 1.26 + mutation),
-      })
-    }
-    organicStroke(context, points, index % 2 === 0 ? COLORS.blue : COLORS.copper, 0.82, reveal * 0.25, 941 + index)
-    organicStroke(context, points.map((point) => ({ x: lerp(point.x, x, 0.17), y: lerp(point.y, y, 0.17) })), COLORS.ink, 0.55, reveal * 0.12, 1009 + index)
-    context.fillStyle = rgba(index === columns + 1 ? COLORS.gold : COLORS.ink, reveal * (index === columns + 1 ? 0.65 : 0.18))
-    context.fillRect(x - 1, y - 1, 2, 2)
-  }
-}
-
-function drawLoveStudies(
-  context: CanvasRenderingContext2D,
-  width: number,
-  transform: WorldTransform,
-  maxRevealY: number,
-  restless: number,
-): void {
-  if (!visiblePassage(transform, 0.215, 0.355)) return
-  const columns = width < 700 ? 4 : 8
-  const rows = 6
-  for (let row = 0; row < rows; row += 1) {
-    const p = 0.245 + row / (rows - 1) * 0.087
-    const y = passageY(p, transform)
-    if (y < -100 || y > transform.viewportHeight + 100) continue
-    const reveal = revealFor(p, maxRevealY)
-    for (let column = 0; column < columns; column += 1) {
-      const x = width * (0.07 + (column + 0.5) / columns * 0.86)
-      const cellWidth = width * 0.7 / columns
-      const seed = row * 47 + column * 11
-      const unique = row === 3 && column === Math.floor(columns * 0.62)
-      const color = unique ? COLORS.gold : (row + column) % 2 === 0 ? COLORS.copper : COLORS.blue
-      const motif = (row + column) % 4
-      context.save()
-      context.translate(x, y)
-      context.strokeStyle = rgba(color, reveal * (unique ? 0.52 : 0.2))
-      context.lineWidth = unique ? 1.3 : 0.75
-      context.beginPath()
-      if (motif === 0) {
-        context.rect(-cellWidth * 0.27, -16, cellWidth * 0.54, 32)
-        context.moveTo(-cellWidth * 0.27, 0)
-        context.bezierCurveTo(-cellWidth * 0.08, -20, cellWidth * 0.08, 20, cellWidth * 0.27, 0)
-      } else if (motif === 1) {
-        for (let ring = 1; ring <= 3; ring += 1) context.ellipse(0, 0, ring * 7, ring * 4.5, ring * 0.22, 0, Math.PI * 2)
-      } else if (motif === 2) {
-        for (let tick = -2; tick <= 2; tick += 1) {
-          context.moveTo(-cellWidth * 0.22, tick * 6)
-          context.lineTo(cellWidth * 0.22, tick * 6 + fractalNoise1D(tick + restless * 0.1, seed, 2) * 5)
-        }
-      } else {
-        context.moveTo(-18, 15)
-        context.quadraticCurveTo(0, -22 - (unique ? 7 : 0), 18, 15)
-        context.moveTo(-14, 8)
-        context.lineTo(14, 8)
-      }
-      context.stroke()
-      context.restore()
-    }
-  }
-}
-
-function drawPatternTaxonomy(
-  context: CanvasRenderingContext2D,
-  width: number,
-  transform: WorldTransform,
-  maxRevealY: number,
-): void {
-  if (!visiblePassage(transform, 0.325, 0.46)) return
-  const columns = width < 700 ? 6 : 12
-  const rows = 9
-  for (let row = 0; row < rows; row += 1) {
-    const p = 0.354 + row / (rows - 1) * 0.092
-    const y = passageY(p, transform)
-    if (y < -100 || y > transform.viewportHeight + 100) continue
-    const local = localProgress(p * WORLD_HEIGHT, 0.34, 0.46)
-    const reveal = revealFor(p, maxRevealY)
-    for (let column = 0; column < columns; column += 1) {
-      const xBase = width * (0.06 + column / Math.max(1, columns - 1) * 0.88)
-      const escape = smoothstep(0.42, 0.96, local) * Math.pow(column / Math.max(1, columns - 1), 2)
-      const x = xBase + Math.sin(column * 2.7 + row) * escape * width * 0.055
-      const offsetY = Math.cos(column * 1.9 + row) * escape * 34
-      const color = column < columns / 2 ? COLORS.copper : COLORS.blue
-      const rotation = (column - columns / 2) * 0.05 + escape * (randomAt(row, column) - 0.5)
-      context.save()
-      context.translate(x, y + offsetY)
-      context.rotate(rotation)
-      context.strokeStyle = rgba(color, reveal * 0.22)
-      context.lineWidth = 0.72
-      context.beginPath()
-      context.moveTo(-7, -7)
-      context.lineTo(7, -7)
-      context.lineTo(7, 7)
-      context.lineTo(-7, 7)
-      if ((row + column) % 3 !== 0 || escape < 0.4) context.closePath()
-      context.stroke()
-      context.restore()
-    }
-  }
-}
-
-function drawConversation(
-  context: CanvasRenderingContext2D,
-  width: number,
-  transform: WorldTransform,
-  maxRevealY: number,
-): void {
-  if (!visiblePassage(transform, 0.425, 0.55)) return
-  for (let index = 0; index < 54; index += 1) {
-    const p = 0.443 + index / 53 * 0.098
-    const y = passageY(p, transform)
-    if (y < -60 || y > transform.viewportHeight + 60) continue
-    const reveal = revealFor(p, maxRevealY)
-    const fromLeft = index % 2 === 0
-    const arrival = smoothstep(0, 1, index / 53)
-    const startX = fromLeft ? width * 0.025 : width * 0.975
-    const endX = signalPosition(p, width, fromLeft ? -1 : 1, 0, true)
-    const dashLength = 5 + randomAt('conversation-dash', index) * 22
-    context.strokeStyle = rgba(fromLeft ? COLORS.copper : COLORS.blue, reveal * (0.13 + arrival * 0.1))
-    context.lineWidth = 0.7
-    context.beginPath()
-    context.moveTo(startX, y)
-    context.bezierCurveTo(lerp(startX, endX, 0.38), y - 18, lerp(startX, endX, 0.74), y + 18, endX, y)
-    context.stroke()
-    context.fillStyle = rgba(COLORS.gold, reveal * 0.3)
-    context.fillRect((startX + endX) / 2 - dashLength / 2, y - 0.5, dashLength, 1)
-  }
-}
-
-function drawFearGrid(
-  context: CanvasRenderingContext2D,
-  width: number,
-  transform: WorldTransform,
-  maxRevealY: number,
-  restless: number,
-): void {
-  if (!visiblePassage(transform, 0.515, 0.65)) return
-  const left = width * 0.055
-  const right = width * 0.945
-  const columns = width < 700 ? 7 : 14
-  for (let row = 0; row < 15; row += 1) {
-    const p = 0.545 + row / 14 * 0.096
-    const y = passageY(p, transform)
-    if (y < -80 || y > transform.viewportHeight + 80) continue
-    const reveal = revealFor(p, maxRevealY)
-    const fracture = smoothstep(0.32, 0.9, (p - 0.53) / 0.11)
-    context.strokeStyle = rgba(nightAt(p) > 0.5 ? COLORS.nightInk : COLORS.ink, reveal * 0.115)
-    context.lineWidth = 0.62
-    context.beginPath()
-    context.moveTo(left, y)
-    context.lineTo(right, y + (randomAt(row, Math.floor(restless)) - 0.5) * 9 * fracture)
-    context.stroke()
-    for (let column = 0; column <= columns; column += 1) {
-      const x = lerp(left, right, column / columns)
-      const wrong = row === 8 && column === Math.floor(columns * 0.57)
-      context.strokeStyle = rgba(wrong ? COLORS.gold : COLORS.ink, reveal * (wrong ? 0.65 : 0.11))
-      context.strokeRect(x - 3, y - 4, 6, 6)
-      if (!wrong && randomAt(row * 19, column) > 0.24) {
-        context.beginPath()
-        context.moveTo(x - 2, y - 1)
-        context.lineTo(x + 2, y + 1)
-        context.stroke()
-      }
-    }
-  }
-}
-
-function drawErasures(
-  context: CanvasRenderingContext2D,
-  width: number,
-  transform: WorldTransform,
-  maxRevealY: number,
-  restless: number,
-): void {
-  if (!visiblePassage(transform, 0.61, 0.72)) return
-  for (let index = 0; index < 27; index += 1) {
-    const p = 0.636 + index / 26 * 0.08
-    const y = passageY(p, transform)
-    if (y < -70 || y > transform.viewportHeight + 70) continue
-    const reveal = revealFor(p, maxRevealY)
-    const x = width * (0.04 + randomAt('erasure-x', index) * 0.62)
-    const length = width * (0.18 + randomAt('erasure-length', index) * 0.45)
-    const dark = nightAt(p)
-    context.save()
-    context.globalCompositeOperation = dark > 0.45 ? 'screen' : 'multiply'
-    for (let scrape = 0; scrape < 5; scrape += 1) {
-      const jitter = (randomAt(index * 101, scrape + Math.floor(restless)) - 0.5) * 5
-      context.strokeStyle = rgba(dark > 0.45 ? COLORS.nightInk : COLORS.bone, reveal * (0.05 + scrape * 0.025))
-      context.lineWidth = 2 + scrape * 1.2
-      context.beginPath()
-      context.moveTo(x, y + jitter)
-      context.lineTo(x + length * (0.88 + randomAt(index, scrape) * 0.12), y + jitter + (randomAt(scrape, index) - 0.5) * 5)
-      context.stroke()
-    }
-    context.restore()
-    context.strokeStyle = rgba(dark > 0.5 ? COLORS.nightInk : COLORS.ink, reveal * 0.09)
-    context.lineWidth = 0.55
-    context.setLineDash([2, 7, 1, 11])
-    context.strokeRect(x + 3, y - 8, length - 6, 17)
-    context.setLineDash([])
-  }
-}
-
-function drawDeep(
-  context: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  transform: WorldTransform,
-  maxRevealY: number,
-): void {
-  if (!visiblePassage(transform, 0.68, 0.81)) return
-  const visible = getVisibleWorldRange(transform, 120)
-  for (let index = 0; index < 150; index += 1) {
-    const p = 0.696 + randomAt('deep-y', index) * 0.112
-    const worldY = p * WORLD_HEIGHT
-    if (worldY < visible.start || worldY > visible.end) continue
-    const y = worldToViewportY(worldY, transform)
-    const x = width * (0.025 + randomAt('deep-x', index) * 0.95)
-    const reveal = markReveal(worldY, maxRevealY, 210)
-    const depth = smoothstep(0.69, 0.8, p)
-    const color = index % 7 === 0 ? COLORS.gold : index % 2 === 0 ? COLORS.copper : COLORS.blue
-    const size = 0.5 + randomAt('deep-size', index) * (1.6 + depth)
-    context.fillStyle = rgba(color, reveal * (0.12 + depth * 0.2))
-    context.fillRect(x, y, size, size)
-    if (index % 11 === 0) {
-      context.strokeStyle = rgba(COLORS.nightInk, reveal * 0.085)
-      context.beginPath()
-      context.moveTo(x, y)
-      context.lineTo(x + width * (0.06 + randomAt(index, 4) * 0.2), y + 18 + depth * 50)
-      context.stroke()
-    }
-  }
-  const gradient = context.createLinearGradient(0, 0, 0, height)
-  gradient.addColorStop(0, rgba(COLORS.night, 0))
-  gradient.addColorStop(1, rgba('#07090e', 0.16))
-  context.fillStyle = gradient
-  context.fillRect(0, 0, width, height)
-}
-
-function drawPurposeBridge(
-  context: CanvasRenderingContext2D,
-  width: number,
-  transform: WorldTransform,
-  maxRevealY: number,
-): void {
-  if (!visiblePassage(transform, 0.765, 0.9)) return
-  const startP = 0.795
-  const endP = 0.883
-  const bands = width < 700 ? 5 : 9
-  for (let band = 0; band < bands; band += 1) {
-    const points: Point[] = []
-    for (let step = 0; step <= 28; step += 1) {
-      const t = step / 28
-      const p = lerp(startP, endP, t)
-      const y = passageY(p, transform)
-      const arch = Math.sin(t * Math.PI)
-      const side = band % 2 === 0 ? -1 : 1
-      const x = width * (0.5 + side * (0.31 - band / bands * 0.22) * (1 - arch * 0.78))
-      points.push({ x, y })
-    }
-    const reveal = revealFor(lerp(startP, endP, 0.5), maxRevealY)
-    organicStroke(context, points, band % 2 === 0 ? COLORS.copper : COLORS.blue, 0.75, reveal * 0.2, 1301 + band)
-  }
-  for (let step = 0; step < 18; step += 1) {
-    if (step === 11) continue
-    const p = lerp(startP + 0.007, endP - 0.007, step / 17)
-    const y = passageY(p, transform)
-    const gap = interpolatedGap(p, width)
-    const center = width * 0.5
-    context.strokeStyle = rgba(COLORS.gold, revealFor(p, maxRevealY) * 0.36)
-    context.lineWidth = 0.78
-    context.beginPath()
-    context.moveTo(center - gap * 0.92, y)
-    context.lineTo(center + gap * 0.92, y)
-    context.stroke()
-  }
-}
-
-function drawAlmostTouch(
-  context: CanvasRenderingContext2D,
-  width: number,
-  transform: WorldTransform,
-  maxRevealY: number,
-): void {
-  if (!visiblePassage(transform, 0.86, 0.955)) return
-  for (let index = 0; index < 23; index += 1) {
-    const p = 0.884 + index / 22 * 0.065
-    const y = passageY(p, transform)
-    if (y < -150 || y > transform.viewportHeight + 150) continue
-    const reveal = revealFor(p, maxRevealY)
-    const local = (p - 0.88) / 0.07
-    const radiusX = width * (0.045 + index * 0.006)
-    const radiusY = 12 + index * 3.7
-    const center = width * (0.5 + Math.sin(index * 1.7) * 0.006)
-    context.strokeStyle = rgba(index % 2 === 0 ? COLORS.copper : COLORS.blue, reveal * (0.12 + local * 0.055))
-    context.lineWidth = 0.65
-    context.beginPath()
-    context.ellipse(center, y, radiusX, radiusY, index * 0.025, 0, Math.PI * 2)
-    context.stroke()
-  }
-}
-
-function drawFinalSingularities(
-  context: CanvasRenderingContext2D,
-  width: number,
-  transform: WorldTransform,
-  maxRevealY: number,
-  restless: number,
-): void {
-  if (!visiblePassage(transform, 0.925, 1, 0.01)) return
-  const columns = width < 700 ? 5 : 9
-  for (let row = 0; row < 8; row += 1) {
-    const p = 0.943 + row / 7 * 0.05
-    const y = passageY(p, transform)
-    if (y < -100 || y > transform.viewportHeight + 100) continue
-    const local = smoothstep(0.94, 1, p)
-    const reveal = revealFor(p, maxRevealY)
-    for (let column = 0; column < columns; column += 1) {
-      const x = width * (0.08 + column / Math.max(1, columns - 1) * 0.84)
-      const individuality = fractalNoise1D(column * 0.8 + row * 1.4 + restless * 0.03, 1501 + row, 2) * local
-      const radius = 3 + ((column + row) % 4) * 2.3
-      context.save()
-      context.translate(x + individuality * 16, y + individuality * 8)
-      context.rotate(individuality)
-      context.strokeStyle = rgba((row + column) % 2 === 0 ? COLORS.copper : COLORS.blue, reveal * (0.16 + local * 0.13))
-      context.lineWidth = 0.72
-      context.beginPath()
-      context.moveTo(0, -radius * (1 + individuality * 0.4))
-      context.lineTo(radius * (1 + individuality), 0)
-      context.lineTo(0, radius * (1 - individuality * 0.2))
-      context.lineTo(-radius * (1 - individuality), 0)
-      context.closePath()
-      context.stroke()
-      context.restore()
-    }
-  }
-
-  const finalY = passageY(0.998, transform)
-  const reveal = revealFor(0.997, maxRevealY)
-  if (finalY > -60 && finalY < transform.viewportHeight + 60) {
-    const x = width * 0.5
-    context.save()
-    context.shadowColor = rgba(COLORS.gold, reveal * 0.9)
-    context.shadowBlur = 28 * reveal
-    context.fillStyle = rgba(COLORS.gold, reveal)
-    context.beginPath()
-    context.arc(x, finalY, 2.7, 0, Math.PI * 2)
-    context.fill()
-    context.restore()
-  }
-}
-
-function drawPointerTrail(context: CanvasRenderingContext2D, trail: readonly TrailPoint[], now: number): void {
-  if (trail.length < 2) return
-  for (let index = 1; index < trail.length; index += 1) {
-    const previous = trail[index - 1]
-    const point = trail[index]
-    const age = now - point.at
-    const life = 1 - clamp(age / 3_800)
-    if (life <= 0) continue
-    context.strokeStyle = rgba(COLORS.ink, life * 0.16)
-    context.lineWidth = 0.45 + life * 0.55
-    context.beginPath()
-    context.moveTo(previous.x, previous.y)
-    context.quadraticCurveTo((previous.x + point.x) / 2, (previous.y + point.y) / 2, point.x, point.y)
-    context.stroke()
-  }
-  const tip = trail[trail.length - 1]
-  const tipLife = 1 - clamp((now - tip.at) / 3_800)
-  context.fillStyle = rgba(COLORS.gold, tipLife * 0.42)
-  context.beginPath()
-  context.arc(tip.x, tip.y, 1.25, 0, Math.PI * 2)
-  context.fill()
-}
-
-function drawWorld(
-  context: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  transform: WorldTransform,
-  maxRevealY: number,
-  now: number,
-  reducedMotion: boolean,
-  trail: readonly TrailPoint[],
-  mobile: boolean,
-  velocity: number,
-): void {
-  const progress = clamp(transform.scrollY / Math.max(1, transform.documentHeight))
-  const restless = reducedMotion ? 0 : Math.floor(now / 3_200)
-  const fastScroll = !reducedMotion && velocity > 0.46
-  drawBackdrop(context, width, height, progress, fastScroll)
-  if (!fastScroll) drawField(context, transform, width, maxRevealY, progress, restless, mobile, false)
-  if (!fastScroll) {
-    drawFirstPressure(context, width, transform, maxRevealY)
-    drawLanguageSediment(context, width, transform, maxRevealY, restless)
-    drawDrafts(context, width, transform, maxRevealY, restless)
-    drawLoveStudies(context, width, transform, maxRevealY, restless)
-    drawPatternTaxonomy(context, width, transform, maxRevealY)
-    drawConversation(context, width, transform, maxRevealY)
-    drawFearGrid(context, width, transform, maxRevealY, restless)
-    drawErasures(context, width, transform, maxRevealY, restless)
-    drawDeep(context, width, height, transform, maxRevealY)
-    drawPurposeBridge(context, width, transform, maxRevealY)
-    drawAlmostTouch(context, width, transform, maxRevealY)
-    drawFinalSingularities(context, width, transform, maxRevealY, restless)
-  }
-  drawSignals(context, width, height, transform, maxRevealY, now, reducedMotion, trail[trail.length - 1], fastScroll)
-  if (!reducedMotion) drawPointerTrail(context, trail, now)
+function drawOverWorld(context: CanvasRenderingContext2D, images: AssetImages, width: number, height: number, transform: WorldTransform, maxRevealY: number, reduced: boolean, progress: number, pointerX: number, pointerY: number, pointerActive: boolean): void {
+  context.clearRect(0, 0, width, height); drawAssetMarks(context, images, 'over', width, height, transform, maxRevealY, reduced, progress); drawInspectionOverlay(context, width, height, pointerX, pointerY, pointerActive, progress)
 }
 
 export function WorldCanvas({ frameRef, onUiFrame }: WorldCanvasProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const underRef = useRef<HTMLCanvasElement>(null); const overRef = useRef<HTMLCanvasElement>(null); const imagesRef = useRef<AssetImages>({}); const onUiFrameRef = useRef(onUiFrame)
+
+  useEffect(() => { onUiFrameRef.current = onUiFrame }, [onUiFrame])
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const context = canvas.getContext('2d', { alpha: false })
-    if (!context) return
+    const under = underRef.current; const over = overRef.current; if (!under || !over) return
+    const underContext = under.getContext('2d', { alpha: false }); const overContext = over.getContext('2d', { alpha: true }); if (!underContext || !overContext) return
+    const reducedQuery = window.matchMedia('(prefers-reduced-motion: reduce)'); const finePointerQuery = window.matchMedia('(pointer: fine)'); const root = document.documentElement
+    let pointerX = .5; let pointerY = .55; let pointerActive = false; let pointerLastMoved = 0; let previousTime = performance.now(); let previousScrollY = window.scrollY; let filteredVelocity = 0; let maxRevealY = 0; let lastUiKey = ''; let lastDrawnScroll = -1; let animationFrame = 0
 
-    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const finePointerQuery = window.matchMedia('(hover: hover) and (pointer: fine)')
-    let reducedMotion = motionQuery.matches
-    let width = 1
-    let height = 1
-    let dpr = 1
-    let animationFrame = 0
-    let previousScrollY = window.scrollY
-    let filteredVelocity = 0
-    let maxRevealY = 0
-    let lastUiKey = ''
-    let lastDrawnScroll = -1
-    let lastPaintAt = -Infinity
-    let previousTime = performance.now()
-    let visible = !document.hidden
-    const trail: TrailPoint[] = []
-
-    const resize = () => {
-      width = Math.max(1, window.innerWidth)
-      height = Math.max(1, window.innerHeight)
-      dpr = Math.min(width < 720 ? 1.5 : 2, window.devicePixelRatio || 1)
-      canvas.width = Math.round(width * dpr)
-      canvas.height = Math.round(height * dpr)
-      canvas.style.width = `${width}px`
-      canvas.style.height = `${height}px`
-      lastDrawnScroll = -1
+    const loadAround = (index: number) => {
+      const wanted = new Set<AssetId>(); for (let offset = -1; offset <= 1; offset += 1) { const beat = proofBeats[index + offset]; beat?.marks.forEach((mark) => wanted.add(mark.assetId)) }
+      wanted.forEach((assetId) => { if (imagesRef.current[assetId]) return; const image = new Image(); image.decoding = 'async'; image.src = assetDefinitions[assetId].source; image.onload = () => { lastDrawnScroll = -1 }; imagesRef.current[assetId] = image })
     }
+    const resize = () => { const width = window.innerWidth; const height = window.innerHeight; const compact = width < 720; const dpr = Math.min(window.devicePixelRatio || 1, compact ? 1.5 : 2); for (const canvas of [under, over]) { canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); canvas.style.width = `${width}px`; canvas.style.height = `${height}px` } underContext.setTransform(dpr, 0, 0, dpr, 0, 0); overContext.setTransform(dpr, 0, 0, dpr, 0, 0); lastDrawnScroll = -1 }
+    const move = (event: PointerEvent) => { if (!finePointerQuery.matches) return; pointerX = clamp(event.clientX / Math.max(1, window.innerWidth)); pointerY = clamp(event.clientY / Math.max(1, window.innerHeight)); pointerActive = true; pointerLastMoved = performance.now() }
+    const leave = () => { pointerActive = false }
+    resize(); window.addEventListener('resize', resize); window.addEventListener('pointermove', move, { passive: true }); document.addEventListener('pointerleave', leave)
 
-    const onPointerMove = (event: PointerEvent) => {
-      if (!finePointerQuery.matches || reducedMotion || event.pointerType === 'touch') return
-      const now = performance.now()
-      const previous = trail[trail.length - 1]
-      if (previous && Math.hypot(previous.x - event.clientX, previous.y - event.clientY) < 3 && now - previous.at < 45) return
-      trail.push({ x: event.clientX, y: event.clientY, at: now })
-      if (trail.length > 110) trail.splice(0, trail.length - 110)
+    const tick = (now: number) => {
+      const width = window.innerWidth; const height = window.innerHeight; const reduced = reducedQuery.matches; const scrollable = Math.max(1, document.documentElement.scrollHeight - height); const scrollY = clamp(window.scrollY, 0, scrollable); const deltaTime = Math.max(8, Math.min(64, now - previousTime)); const scrollDelta = scrollY - previousScrollY; const instantVelocity = Math.abs(scrollDelta) / deltaTime
+      filteredVelocity = lerp(filteredVelocity, clamp(instantVelocity / 2.2), .12); const direction: -1 | 0 | 1 = Math.abs(scrollDelta) < .1 ? 0 : scrollDelta > 0 ? 1 : -1; previousScrollY = scrollY; previousTime = now
+      const transform: WorldTransform = { worldHeight: WORLD_HEIGHT, documentHeight: scrollable, viewportHeight: height, scrollY }; maxRevealY = reduced ? WORLD_HEIGHT : advanceMaxRevealY(maxRevealY, revealCandidateY(transform, .88), WORLD_HEIGHT)
+      const progress = clamp(scrollY / scrollable); const movementIndex = getProofBeatIndex(progress); const beat = proofBeats[movementIndex]; const range = getVisibleWorldRange(transform); const coarse = !finePointerQuery.matches
+      if (coarse) { pointerX = .28 + Math.sin(progress * 15) * .18; pointerY = .5; pointerActive = !reduced } else if (pointerActive && now - pointerLastMoved > 3800) pointerActive = false
+      loadAround(movementIndex); const profile = interpolateProofProfiles(progress); const dissolveProgress = getMotifState(progress).dissolution
+      const pointer = { x: pointerX, y: pointerY, active: pointerActive, coarse, trail: [] }; const frame: WorldFrame = { progress, previousProgress: frameRef.current.progress, localProgress: getLocalProofProgress(progress, beat), movementIndex, scrollY, worldHeight: WORLD_HEIGHT, viewportWidth: width, viewportHeight: height, visibleTop: range.start, visibleBottom: range.end, maxRevealY, velocity: filteredVelocity, timeMs: now, scrollDirection: direction, dissolveProgress, pointer, reducedMotion: reduced, profile }; frameRef.current = frame
+      root.style.setProperty('--probe-x', `${pointerX * width}px`); root.style.setProperty('--probe-y', `${scrollY + pointerY * height}px`); root.style.setProperty('--probe-screen-y', `${pointerY * height}px`); root.style.setProperty('--probe-opacity', pointerActive ? '1' : '0'); root.style.setProperty('--proof-progress', progress.toFixed(5)); root.style.setProperty('--dissolve', dissolveProgress.toFixed(4)); root.style.setProperty('--reveal-bottom', `${(100 - maxRevealY / WORLD_HEIGHT * 100).toFixed(3)}%`)
+      const uiKey = `${movementIndex}/${profile.visual.night > .5}/${progress > .045}/${dissolveProgress.toFixed(2)}`; if (uiKey !== lastUiKey) { lastUiKey = uiKey; onUiFrameRef.current?.(frame) }
+      const restlessChanged = !reduced && Math.floor(now / 3600) !== Math.floor((now - deltaTime) / 3600); if (!reduced || lastDrawnScroll !== scrollY || restlessChanged || pointerActive) { drawUnderWorld(underContext, imagesRef.current, width, height, transform, maxRevealY, now, reduced, progress, filteredVelocity); drawOverWorld(overContext, imagesRef.current, width, height, transform, maxRevealY, reduced, progress, pointerX, pointerY, pointerActive); lastDrawnScroll = scrollY }
+      animationFrame = window.requestAnimationFrame(tick)
     }
+    animationFrame = window.requestAnimationFrame(tick)
+    return () => { window.cancelAnimationFrame(animationFrame); window.removeEventListener('resize', resize); window.removeEventListener('pointermove', move); document.removeEventListener('pointerleave', leave) }
+  }, [frameRef])
 
-    const onMotionChange = () => {
-      reducedMotion = motionQuery.matches
-      if (reducedMotion) trail.length = 0
-      lastDrawnScroll = -1
-    }
-
-    const onVisibility = () => {
-      visible = !document.hidden
-      if (visible) {
-        previousTime = performance.now()
-        animationFrame = requestAnimationFrame(render)
-      } else {
-        cancelAnimationFrame(animationFrame)
-      }
-    }
-
-    const render = (now: number) => {
-      const scrollable = Math.max(1, document.documentElement.scrollHeight - height)
-      const scrollY = clamp(window.scrollY, 0, scrollable)
-      const deltaTime = Math.max(8, Math.min(64, now - previousTime))
-      const instantVelocity = Math.abs(scrollY - previousScrollY) / deltaTime
-      filteredVelocity = lerp(filteredVelocity, clamp(instantVelocity / 2.2), 0.12)
-      previousScrollY = scrollY
-      previousTime = now
-
-      const transform: WorldTransform = {
-        worldHeight: WORLD_HEIGHT,
-        documentHeight: scrollable,
-        viewportHeight: height,
-        scrollY,
-      }
-      maxRevealY = reducedMotion
-        ? WORLD_HEIGHT
-        : advanceMaxRevealY(maxRevealY, revealCandidateY(transform, 0.88), WORLD_HEIGHT)
-
-      const progress = clamp(scrollY / scrollable)
-      const passageIndex = getPassageIndex(progress)
-      const passage = passages[passageIndex]
-      const visibleRange = getVisibleWorldRange(transform)
-      const previousProgress = frameRef.current.progress
-      const frame: WorldFrame = {
-        progress,
-        previousProgress,
-        localProgress: getLocalPassageProgress(progress, passage),
-        passageIndex,
-        scrollY,
-        worldHeight: WORLD_HEIGHT,
-        viewportWidth: width,
-        viewportHeight: height,
-        visibleTop: visibleRange.start,
-        visibleBottom: visibleRange.end,
-        maxRevealY,
-        velocity: filteredVelocity,
-        timeMs: now,
-        pointer: {
-          x: trail.length > 0 ? trail[trail.length - 1].x / width : 0.5,
-          y: trail.length > 0 ? trail[trail.length - 1].y / height : 0.5,
-          active: trail.length > 0 && now - trail[trail.length - 1].at < 3_800,
-          trail: trail.map((point) => ({ x: point.x / width, y: point.y / height, timeMs: point.at })),
-        },
-        reducedMotion,
-        profile: interpolatePassageProfiles(progress),
-      }
-      frameRef.current = frame
-
-      const uiKey = `${frame.passageIndex}:${progress > 0.055}:${frame.profile.visual.night > 0.5}`
-      if (uiKey !== lastUiKey) {
-        lastUiKey = uiKey
-        onUiFrame?.(frame)
-      }
-
-      const restlessChanged = !reducedMotion && Math.floor(now / 3_200) !== Math.floor((now - deltaTime) / 3_200)
-      const trailActive = trail.some((point) => now - point.at < 3_800)
-      const shouldDraw = !reducedMotion || lastDrawnScroll !== scrollY || restlessChanged || trailActive
-      const fastScroll = !reducedMotion && filteredVelocity > 0.46
-      const paintDue = !fastScroll || now - lastPaintAt >= 29
-      if (shouldDraw && paintDue) {
-        while (trail.length > 0 && now - trail[0].at > 3_800) trail.shift()
-        context.setTransform(dpr, 0, 0, dpr, 0, 0)
-        context.clearRect(0, 0, width, height)
-        drawWorld(context, width, height, transform, maxRevealY, now, reducedMotion, trail, width < 720, filteredVelocity)
-        lastDrawnScroll = scrollY
-        lastPaintAt = now
-      }
-      if (visible) animationFrame = requestAnimationFrame(render)
-    }
-
-    resize()
-    window.addEventListener('resize', resize, { passive: true })
-    window.addEventListener('pointermove', onPointerMove, { passive: true })
-    document.addEventListener('visibilitychange', onVisibility)
-    motionQuery.addEventListener('change', onMotionChange)
-    animationFrame = requestAnimationFrame(render)
-
-    return () => {
-      cancelAnimationFrame(animationFrame)
-      window.removeEventListener('resize', resize)
-      window.removeEventListener('pointermove', onPointerMove)
-      document.removeEventListener('visibilitychange', onVisibility)
-      motionQuery.removeEventListener('change', onMotionChange)
-    }
-  }, [frameRef, onUiFrame])
-
-  return <canvas ref={canvasRef} className="world-canvas" aria-hidden="true" />
+  return <><canvas ref={underRef} className="world-canvas world-canvas-under" aria-hidden="true" /><canvas ref={overRef} className="world-canvas world-canvas-over" aria-hidden="true" /></>
 }

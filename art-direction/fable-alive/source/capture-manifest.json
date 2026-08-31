@@ -1,0 +1,146 @@
+[
+  {
+    "index": 0,
+    "filename": "tile-00.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 0,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 1,
+    "filename": "tile-01.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 1200,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 2,
+    "filename": "tile-02.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 2400,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 3,
+    "filename": "tile-03.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 3600,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 4,
+    "filename": "tile-04.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 4800,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 5,
+    "filename": "tile-05.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 6000,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 6,
+    "filename": "tile-06.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 7200,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 7,
+    "filename": "tile-07.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 8400,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 8,
+    "filename": "tile-08.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 9600,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 9,
+    "filename": "tile-09.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 10800,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 10,
+    "filename": "tile-10.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 12000,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 11,
+    "filename": "tile-11.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 13200,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 12,
+    "filename": "tile-12.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 14400,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 13,
+    "filename": "tile-13.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 15600,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 14,
+    "filename": "tile-14.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 16800,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 15,
+    "filename": "tile-15.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 18000,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 16,
+    "filename": "tile-16.png",
+    "width": 2160,
+    "height": 1623,
+    "logicalTop": 19200,
+    "logicalHeight": 1202
+  },
+  {
+    "index": 17,
+    "filename": "tile-17.png",
+    "width": 2160,
+    "height": 108,
+    "logicalTop": 20400,
+    "logicalHeight": 80
+  }
+]

@@ -1,0 +1,90 @@
+html.fable-alive-document,
+body.fable-alive-page {
+  background: #181410;
+  scrollbar-width: none;
+}
+
+body.fable-alive-page.fable-flock-clickable { cursor: pointer; }
+
+html.fable-alive-document::-webkit-scrollbar,
+body.fable-alive-page::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+body.fable-alive-page {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.fable-alive-root {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  overflow: clip;
+  background: #181410;
+}
+
+.fable-wall {
+  position: relative;
+  width: 100vw;
+  overflow: hidden;
+  background: #181410;
+  isolation: isolate;
+}
+
+.fable-wall-tile {
+  position: absolute;
+  inset-inline: 0;
+  width: 100%;
+  overflow: hidden;
+  background: #f6f1e4;
+  line-height: 0;
+}
+
+.fable-wall-tile.theme-night { background: #181410; }
+
+.fable-wall-tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: fill;
+  pointer-events: none;
+  user-select: none;
+}
+
+.fable-living-overlay {
+  position: fixed;
+  z-index: 2;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+}
+
+.fable-motion-toggle {
+  position: fixed;
+  z-index: 4;
+  right: 18px;
+  bottom: 18px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+  border-radius: 999px;
+  color: #5d5549;
+  background: rgb(246 241 228 / 82%);
+  font: 500 12px/1.2 'Shantell Sans', cursive;
+  letter-spacing: 0.02em;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+
+.fable-motion-toggle:focus-visible {
+  outline: 2px solid #9b7228;
+  outline-offset: 3px;
+}
+
+@media (forced-colors: active) {
+  .fable-wall { forced-color-adjust: none; }
+}

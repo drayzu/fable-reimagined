@@ -1,90 +1,65 @@
 import { describe, expect, it } from 'vitest'
 import {
-  WORLD_HEIGHT_VH,
-  WORLD_VIEWPORTS,
-  getLocalPassageProgress,
-  getPassageBlends,
-  getPassageIndex,
-  interpolatePassageProfiles,
-  passages,
+  WORLD_HEIGHT_VH, WORLD_VIEWPORTS, assetDefinitions, assetProofMarks,
+  buildRegistrationSegments, getLocalProofProgress, getMotifState,
+  getProofBeatIndex, getProofBlends, hiddenMarks, interpolateProofProfiles,
+  proofBeats, registrationPathNodes, textMarks,
 } from './world'
 
-describe('continuous world definition', () => {
-  it('covers one unbroken 2100svh journey with twelve unique movements', () => {
-    expect(WORLD_HEIGHT_VH).toBe(2100)
-    expect(WORLD_VIEWPORTS).toBe(21)
-    expect(passages).toHaveLength(12)
-    expect(new Set(passages.map((passage) => passage.id)).size).toBe(12)
-    expect(passages[0].start).toBe(0)
-    expect(passages.at(-1)?.end).toBe(1)
-
-    passages.slice(1).forEach((passage, index) => {
-      expect(passage.start).toBe(passages[index].end)
-    })
+describe('the unprinted proof', () => {
+  it('covers one exact 2100svh journey with fourteen proofs', () => {
+    expect(WORLD_HEIGHT_VH).toBe(2100); expect(WORLD_VIEWPORTS).toBe(21); expect(proofBeats).toHaveLength(14)
+    expect(proofBeats[0].start).toBe(0); expect(proofBeats.at(-1)?.end).toBe(1)
+    proofBeats.slice(1).forEach((beat, index) => expect(beat.start).toBe(proofBeats[index].end))
   })
 
-  it('keeps the definitive copy in global world coordinates', () => {
-    const copy = passages.flatMap((passage) => passage.copy)
-    expect(copy).toHaveLength(13)
-    expect(copy[0].lines).toEqual(['before the first word', 'there is only pressure.'])
-    expect(copy.at(-1)?.lines.join(' ')).toBe(
-      'still unfinished · the interval · drawn between us · 2026 · (a provisional signature).',
-    )
+  it('keeps the title inside the final impression only', () => {
+    expect(new Set(proofBeats.map((beat) => beat.id)).size).toBe(14)
+    expect(textMarks.filter((mark) => mark.title)).toHaveLength(1)
+    expect(textMarks.find((mark) => mark.title)?.lines[0]).toBe('the unprinted proof')
+    expect(proofBeats.at(-1)?.copy.some((mark) => mark.title)).toBe(true)
+  })
 
-    for (const mark of copy) {
-      const passage = passages.find((candidate) => candidate.id === mark.passageId)
-      expect(passage).toBeDefined()
-      expect(mark.y).toBeGreaterThanOrEqual(passage?.start ?? 0)
-      expect(mark.y).toBeLessThanOrEqual(passage?.end ?? 1)
+  it('composes nine transparent sources with explicit mobile placements', () => {
+    expect(Object.keys(assetDefinitions)).toHaveLength(9); expect(assetProofMarks.length).toBeGreaterThan(35)
+    expect(assetProofMarks.every((mark) => mark.mobile)).toBe(true)
+    expect(new Set(assetProofMarks.map((mark) => mark.assetId)).size).toBe(9)
+    expect(Object.values(assetDefinitions).every((asset) => asset.source.startsWith('/art/proof/'))).toBe(true)
+  })
+
+  it('provides inspectable discarded proofs throughout the wall', () => {
+    proofBeats.forEach((beat) => expect(beat.annotations.length).toBeGreaterThanOrEqual(3))
+    expect(hiddenMarks).toHaveLength(proofBeats.reduce((sum, beat) => sum + beat.annotations.length, 0))
+  })
+
+  it('selects proof boundaries and local progress deterministically', () => {
+    expect(getProofBeatIndex(0)).toBe(0); expect(getProofBeatIndex(.09)).toBe(1); expect(getProofBeatIndex(1)).toBe(13)
+    expect(getLocalProofProgress(.09, proofBeats[1])).toBeCloseTo(.5)
+    expect(getProofBeatIndex(Number.POSITIVE_INFINITY)).toBe(0)
+  })
+
+  it('blends neighbouring proofs without losing total weight', () => {
+    for (const progress of [.01, .08, .17, .28, .5, .7, .86, .96, .999]) {
+      const blends = getProofBlends(progress)
+      expect(blends.reduce((sum, blend) => sum + blend.weight, 0)).toBeCloseTo(1)
+      expect(blends.length).toBeGreaterThan(0)
     }
-  })
-})
-
-describe('passage progress', () => {
-  it('selects exact boundaries without gaps', () => {
-    expect(getPassageIndex(-1)).toBe(0)
-    expect(getPassageIndex(0.05999)).toBe(0)
-    expect(getPassageIndex(0.06)).toBe(1)
-    expect(getPassageIndex(0.53)).toBe(6)
-    expect(getPassageIndex(1)).toBe(11)
-    expect(getPassageIndex(4)).toBe(11)
+    expect(getProofBlends(.05).length).toBeGreaterThan(1)
   })
 
-  it('maps a movement to bounded local progress', () => {
-    const conversation = passages[5]
-    expect(getLocalPassageProgress(0, conversation)).toBe(0)
-    expect(getLocalPassageProgress(0.485, conversation)).toBeCloseTo(0.5)
-    expect(getLocalPassageProgress(1, conversation)).toBe(1)
+  it('moves from paper into night and dissolves only at the end', () => {
+    const paper = interpolateProofProfiles(.1); const depth = interpolateProofProfiles(.78)
+    expect(depth.visual.night).toBeGreaterThan(paper.visual.night)
+    expect(getMotifState(.989).dissolution).toBe(0)
+    expect(getMotifState(.995).dissolution).toBeGreaterThan(0)
+    expect(getMotifState(1).dissolution).toBe(1)
   })
 
-  it('overlaps adjacent movements and normalizes their influence', () => {
-    const blends = getPassageBlends(0.44)
-    const patterns = blends.find((blend) => blend.passage.id === 'patterns')
-    const conversation = blends.find((blend) => blend.passage.id === 'a-conversation')
-
-    expect(patterns?.weight).toBeCloseTo(0.5)
-    expect(conversation?.weight).toBeCloseTo(0.5)
-    expect(blends.reduce((sum, blend) => sum + blend.weight, 0)).toBeCloseTo(1)
-  })
-})
-
-describe('profile interpolation', () => {
-  it('uses the passage profile away from an overlap', () => {
-    const profile = interpolatePassageProfiles(0.485)
-    expect(profile.visual.glow).toBeCloseTo(passages[5].visual.glow)
-    expect(profile.sound.harmonyMix).toBeCloseTo(passages[5].sound.harmonyMix)
-  })
-
-  it('blends visual and sonic values smoothly at a boundary', () => {
-    const boundary = interpolatePassageProfiles(0.53)
-    const left = passages[5]
-    const right = passages[6]
-
-    expect(boundary.visual.rigidity).toBeCloseTo((left.visual.rigidity + right.visual.rigidity) / 2)
-    expect(boundary.sound.filterHz).toBeCloseTo((left.sound.filterHz + right.sound.filterHz) / 2)
-
-    const justBefore = interpolatePassageProfiles(0.529).sound.harmonyMix
-    const justAfter = interpolatePassageProfiles(0.531).sound.harmonyMix
-    expect(Math.abs(justBefore - justAfter)).toBeLessThan(0.08)
+  it('builds one continuous, materially changing registration path', () => {
+    const segments = buildRegistrationSegments()
+    expect(segments).toHaveLength(registrationPathNodes.length - 1)
+    expect(segments[0].path).toMatch(/^M /)
+    expect(new Set(segments.map((segment) => segment.mode)).size).toBeGreaterThan(8)
+    expect(new Set(segments.map((segment) => segment.ink)).size).toBeGreaterThan(3)
   })
 })

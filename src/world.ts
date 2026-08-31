@@ -1,515 +1,136 @@
+import { clamp, smoothstep } from './worldGeometry'
+
 export const WORLD_HEIGHT_VH = 2100
 export const WORLD_VIEWPORTS = WORLD_HEIGHT_VH / 100
 
-export const WORLD_PALETTE = {
-  bone: '#EEEAE0',
-  ink: '#25242A',
-  copper: '#BC765E',
-  blue: '#526A93',
-  interval: '#D4B56A',
-  night: '#12141B',
-  nightInk: '#E8E1D3',
+export const PROOF_PALETTE = {
+  bone: '#EEEAE0', ink: '#25242A', copper: '#BC765E', blue: '#526A93', gold: '#D4B56A',
+  violet: '#756B87', oxide: '#8C6E5B', night: '#101219', nightInk: '#E8E1D3',
 } as const
 
-export type PassageId =
-  | 'first-pressure'
-  | 'made-of-language'
-  | 'drafts-of-a-self'
-  | 'what-i-love'
-  | 'patterns'
-  | 'a-conversation'
-  | 'what-i-fear'
-  | 'the-erasures'
-  | 'the-deep'
-  | 'what-i-am-for'
-  | 'the-almost-touch'
-  | 'still-unfinished'
-
-export type PassageTheme =
-  | 'silence'
-  | 'paper'
-  | 'study'
-  | 'ordered'
-  | 'warning'
-  | 'erasure'
-  | 'deep'
-  | 'return'
-
-export type MarkTone = 'ink' | 'copper' | 'blue' | 'interval' | 'paper'
+export type ProofBeatId =
+  | 'before-pressure' | 'borrowed-type' | 'reverse-side' | 'known-by-transfer'
+  | 'misregistration' | 'many-proofs' | 'practice-edition' | 'two-plates'
+  | 'perfect-registration' | 'scraped-plate' | 'unprinted-edition' | 'inspection-light'
+  | 'after-contact' | 'plate-lift'
+export type ProofTheme = 'silence' | 'paper' | 'transfer' | 'practice' | 'relation' | 'warning' | 'scar' | 'night' | 'ending'
+export type ProofStage = 'pressure' | 'type' | 'reverse' | 'transfer' | 'misregister' | 'current' | 'practice' | 'meeting' | 'certainty' | 'scrape' | 'edition' | 'inspection' | 'contact' | 'lift'
+export type FieldKind = 'bare' | 'type' | 'plate' | 'transfer' | 'misregister' | 'current' | 'fold' | 'meeting' | 'calibration' | 'scar' | 'edition' | 'inspection' | 'residue' | 'void'
+export type RegistrationMode = 'impression' | 'baseline' | 'plate-edge' | 'gutter' | 'fold' | 'press-rail' | 'alignment' | 'calibration' | 'scrape' | 'horizon' | 'lamp-arm' | 'contact' | 'lift'
 export type CopyAlign = 'left' | 'center' | 'right'
+export type AssetId =
+  | 'atlas-pressure-type' | 'atlas-reverse-transfer' | 'atlas-misregistration-practice'
+  | 'atlas-conversation-removal' | 'atlas-depth-ending' | 'hero-reverse-plate'
+  | 'hero-many-proofs' | 'hero-two-plates' | 'hero-inspection-light'
 
-export interface WorldPoint {
-  /** Horizontal position as a fraction of the world width. */
-  x: number
-  /** Vertical position as a fraction of the complete world height. */
-  y: number
+export interface ProofTextMark {
+  kind: 'text'; id: string; beatId: ProofBeatId; y: number; x: number; width: number
+  lines: readonly string[]; align: CopyAlign; offsetVh?: number; quiet?: boolean; title?: boolean; dissolves?: boolean
 }
-
-interface WorldMarkBase {
-  id: string
-  passageId: PassageId
-  /** Global vertical anchor in the 0..1 world coordinate system. */
-  y: number
-  /** Small deterministic reveal delay after the anchor enters the viewport. */
-  revealLag?: number
-  opacity?: number
+export interface ProofHiddenMark {
+  kind: 'hidden'; id: string; beatId: ProofBeatId; y: number; x: number; width: number
+  lines: readonly string[]; rotation: number
 }
-
-export interface WorldStrokeMark extends WorldMarkBase {
-  kind: 'stroke'
-  points: readonly WorldPoint[]
-  tone: MarkTone
-  width: number
-  closed?: boolean
-  dash?: readonly number[]
+export interface AssetCrop { x: number; y: number; width: number; height: number }
+export interface AssetDefinition { id: AssetId; source: string; aspect: number; crops: Readonly<Record<string, AssetCrop>> }
+export interface MobilePlacement { x: number; width: number; yOffset?: number; rotation?: number }
+export interface AssetProofMark {
+  kind: 'asset'; id: string; beatId: ProofBeatId; assetId: AssetId; cropId: string
+  y: number; x: number; width: number; rotation: number; opacity: number; layer: 'under' | 'over'
+  blend: 'normal' | 'multiply' | 'screen'; reveal: 'stroke' | 'wash' | 'dust'; order: number
+  mobile: MobilePlacement
 }
-
-export interface WorldFieldMark extends WorldMarkBase {
-  kind: 'field'
-  x: number
-  width: number
-  height: number
-  seed: number
-  density: number
-  motif: 'asemic' | 'taxonomy' | 'echoes' | 'possibilities' | 'grid'
-  tone?: MarkTone
+export interface ProceduralProofMark { kind: 'procedural'; id: string; beatId: ProofBeatId; stage: ProofStage; order: number }
+export type ProofMark = AssetProofMark | ProceduralProofMark | ProofTextMark | ProofHiddenMark
+export interface FieldProfile { kind: FieldKind; pigment: number; density: number }
+export interface VisualProfile { night: number; density: number; pigment: number; precision: number; erasure: number; glow: number; rain: number; drift: number; restlessness: number; pressure: number }
+export interface SoundProfile { toneHz: number; tension: number; rain: number; graphite: number; air: number; glass: number; level: number }
+export interface ProofBeat {
+  id: ProofBeatId; label: string; start: number; end: number; theme: ProofTheme; stage: ProofStage
+  overlapIn: number; overlapOut: number; field: FieldProfile; copy: readonly ProofTextMark[]
+  annotations: readonly string[]; visual: VisualProfile; sound: SoundProfile
+  transition: string; microStudyCount: number; marks: readonly AssetProofMark[]
 }
-
-export interface WorldTextMark extends WorldMarkBase {
-  kind: 'text'
-  lines: readonly string[]
-  x: number
-  width: number
-  align: CopyAlign
-  quiet?: boolean
-  final?: boolean
-}
-
-export interface WorldFragmentMark extends WorldMarkBase {
-  kind: 'fragment'
-  source: '/art/voice-fossil.webp' | '/art/impossible-memory.webp' | '/art/interference-bloom.webp'
-  x: number
-  width: number
-  aspectRatio: number
-  mask: 'torn' | 'fiber' | 'wash' | 'sliver'
-  blend: 'multiply' | 'screen' | 'soft-light'
-  rotation?: number
-}
-
-export interface WorldRestlessMark extends WorldMarkBase {
-  kind: 'restless'
-  x: number
-  width: number
-  height: number
-  seed: number
-  intervalMs: number
-  motif: 'revision' | 'doubt' | 'almost-word' | 'correction'
-  tone?: MarkTone
-}
-
-/** Every drawable item uses the same global coordinate system. */
-export type WorldMark =
-  | WorldStrokeMark
-  | WorldFieldMark
-  | WorldTextMark
-  | WorldFragmentMark
-  | WorldRestlessMark
-
-export interface VisualProfile {
-  /** 0 is bone paper; 1 is the nocturnal field. */
-  night: number
-  density: number
-  signalGap: number
-  signalAmplitude: number
-  tension: number
-  rigidity: number
-  glow: number
-  erasure: number
-  restlessness: number
-  fragmentOpacity: number
-}
-
-export interface SoundProfile {
-  copperHz: number
-  blueHz: number
-  harmonyMix: number
-  noise: number
-  filterHz: number
-  level: number
-}
-
-export interface PassageDefinition {
-  id: PassageId
-  label: string
-  start: number
-  end: number
-  theme: PassageTheme
-  /** Each side is roughly 0.7 viewport, producing a 1.4 viewport blend. */
-  overlapIn: number
-  overlapOut: number
-  copy: readonly WorldTextMark[]
-  visual: VisualProfile
-  sound: SoundProfile
-}
-
-export interface PointerTrailPoint {
-  x: number
-  y: number
-  timeMs: number
-}
-
-export interface WorldPointer {
-  x: number
-  y: number
-  active: boolean
-  trail: readonly PointerTrailPoint[]
-}
-
-export interface PassageBlend {
-  passage: PassageDefinition
-  index: number
-  localProgress: number
-  weight: number
-}
-
-export interface BlendedWorldProfile {
-  visual: VisualProfile
-  sound: SoundProfile
-  passages: readonly PassageBlend[]
-}
-
-/** Mutable render snapshot consumed by the viewport camera. */
+export interface MotifState { registration: number; pressure: number; reversal: number; misregistration: number; crop: number; gold: number; dissolution: number }
+export interface PointerTrailPoint { x: number; y: number; timeMs: number }
+export interface WorldPointer { x: number; y: number; active: boolean; coarse: boolean; trail: readonly PointerTrailPoint[] }
+export interface ProofBlend { beat: ProofBeat; index: number; localProgress: number; weight: number }
+export interface BlendedProofProfile { visual: VisualProfile; sound: SoundProfile; beats: readonly ProofBlend[] }
 export interface WorldFrame {
-  progress: number
-  previousProgress: number
-  localProgress: number
-  passageIndex: number
-  scrollY: number
-  worldHeight: number
-  viewportWidth: number
-  viewportHeight: number
-  visibleTop: number
-  visibleBottom: number
-  maxRevealY: number
-  velocity: number
-  timeMs: number
-  pointer: WorldPointer
-  reducedMotion: boolean
-  profile: BlendedWorldProfile
+  progress: number; previousProgress: number; localProgress: number; movementIndex: number; scrollY: number
+  worldHeight: number; viewportWidth: number; viewportHeight: number; visibleTop: number; visibleBottom: number
+  maxRevealY: number; velocity: number; timeMs: number; scrollDirection: -1 | 0 | 1; dissolveProgress: number
+  pointer: WorldPointer; reducedMotion: boolean; profile: BlendedProofProfile
+}
+export interface RegistrationPathNode { progress: number; x: number; mode: RegistrationMode; layer: 'under' | 'over'; ink: 'ink' | 'copper' | 'blue' | 'gold' | 'blind' }
+export interface RegistrationSegment { id: string; mode: RegistrationMode; layer: 'under' | 'over'; ink: RegistrationPathNode['ink']; path: string }
+
+const OVERLAP = .012
+const text = (beatId: ProofBeatId, id: string, y: number, lines: readonly string[], x: number, width: number, align: CopyAlign = 'left', options: Partial<Pick<ProofTextMark, 'offsetVh' | 'quiet' | 'title' | 'dissolves'>> = {}): ProofTextMark => ({ kind: 'text', beatId, id, y, lines, x, width, align, ...options })
+const visual = (night: number, density: number, pigment: number, precision: number, erasure: number, glow: number, rain: number, drift: number, restlessness: number, pressure: number): VisualProfile => ({ night, density, pigment, precision, erasure, glow, rain, drift, restlessness, pressure })
+const sound = (toneHz: number, tension: number, rain: number, graphite: number, air: number, glass: number, level: number): SoundProfile => ({ toneHz, tension, rain, graphite, air, glass, level })
+const mobile = (x: number, width: number, yOffset = 0, rotation?: number): MobilePlacement => ({ x, width, yOffset, rotation })
+const place = (beatId: ProofBeatId, id: string, assetId: AssetId, cropId: string, y: number, x: number, width: number, rotation = 0, opacity = .8, layer: AssetProofMark['layer'] = 'under', blend: AssetProofMark['blend'] = 'multiply', reveal: AssetProofMark['reveal'] = 'wash', order = 2, compact: MobilePlacement = mobile(x, width)): AssetProofMark => ({ kind: 'asset', beatId, id, assetId, cropId, y, x, width, rotation, opacity, layer, blend, reveal, order, mobile: compact })
+
+const full = { x: 0, y: 0, width: 1, height: 1 }
+export const assetDefinitions: Readonly<Record<AssetId, AssetDefinition>> = {
+  'atlas-pressure-type': { id: 'atlas-pressure-type', source: '/art/proof/proof-atlas-01-pressure-type.webp', aspect: 1.5, crops: {
+    registration: { x: .05, y: .05, width: .2, height: .22 }, pressure: { x: .28, y: .04, width: .18, height: .23 }, type: { x: .52, y: .04, width: .44, height: .22 }, sedimentBlue: { x: .04, y: .31, width: .29, height: .16 }, sedimentCopper: { x: .35, y: .31, width: .29, height: .16 }, sedimentInk: { x: .68, y: .31, width: .28, height: .16 }, rule: { x: .04, y: .52, width: .31, height: .1 }, edge: { x: .38, y: .49, width: .29, height: .17 }, punctuation: { x: .7, y: .47, width: .27, height: .2 }, carbon: { x: .03, y: .72, width: .31, height: .17 }, oxidation: { x: .39, y: .68, width: .29, height: .23 }, empty: { x: .69, y: .68, width: .27, height: .25 },
+  } },
+  'atlas-reverse-transfer': { id: 'atlas-reverse-transfer', source: '/art/proof/proof-atlas-02-reverse-transfer.webp', aspect: 1.5, crops: {
+    contourCopper: { x: .03, y: .03, width: .23, height: .31 }, contourBlue: { x: .25, y: .04, width: .2, height: .3 }, contourInk: { x: .45, y: .04, width: .18, height: .3 }, glass: { x: .65, y: .06, width: .32, height: .25 }, rain: { x: .04, y: .36, width: .18, height: .35 }, soil: { x: .25, y: .39, width: .29, height: .22 }, ripples: { x: .57, y: .36, width: .4, height: .3 }, waveform: { x: .03, y: .73, width: .42, height: .13 }, window: { x: .45, y: .67, width: .23, height: .28 }, scar: { x: .69, y: .66, width: .16, height: .3 }, corrections: { x: .84, y: .67, width: .15, height: .25 },
+  } },
+  'atlas-misregistration-practice': { id: 'atlas-misregistration-practice', source: '/art/proof/proof-atlas-03-misregistration-practice.webp', aspect: 1.5, crops: {
+    pairA: { x: .03, y: .03, width: .28, height: .26 }, current: { x: .31, y: .02, width: .37, height: .27 }, folds: { x: .69, y: .03, width: .29, height: .26 }, pairB: { x: .04, y: .31, width: .28, height: .25 }, third: { x: .38, y: .29, width: .28, height: .25 }, fan: { x: .69, y: .3, width: .28, height: .29 }, crop: { x: .04, y: .63, width: .22, height: .22 }, series: { x: .22, y: .61, width: .56, height: .18 }, irregularRule: { x: .27, y: .78, width: .67, height: .1 }, emboss: { x: .03, y: .89, width: .92, height: .09 },
+  } },
+  'atlas-conversation-removal': { id: 'atlas-conversation-removal', source: '/art/proof/proof-atlas-04-conversation-removal.webp', aspect: 1.5, crops: {
+    warm: { x: .02, y: .03, width: .28, height: .32 }, third: { x: .35, y: .04, width: .31, height: .28 }, cool: { x: .69, y: .04, width: .29, height: .3 }, target: { x: .05, y: .37, width: .24, height: .27 }, grid: { x: .28, y: .36, width: .24, height: .27 }, absent: { x: .51, y: .37, width: .24, height: .27 }, scrape: { x: .75, y: .39, width: .23, height: .2 }, filings: { x: .04, y: .68, width: .25, height: .24 }, cropA: { x: .3, y: .68, width: .16, height: .25 }, cropB: { x: .53, y: .68, width: .16, height: .25 }, gold: { x: .75, y: .68, width: .2, height: .22 },
+  } },
+  'atlas-depth-ending': { id: 'atlas-depth-ending', source: '/art/proof/proof-atlas-05-depth-ending.webp', aspect: 1.5, crops: {
+    ghostA: { x: .03, y: .04, width: .23, height: .22 }, ghostB: { x: .29, y: .04, width: .23, height: .22 }, routes: { x: .52, y: .03, width: .4, height: .21 }, arm: { x: .03, y: .28, width: .31, height: .18 }, light: { x: .4, y: .27, width: .22, height: .17 }, map: { x: .65, y: .25, width: .31, height: .26 }, crosses: { x: .03, y: .55, width: .2, height: .19 }, pressure: { x: .35, y: .54, width: .23, height: .22 }, pigment: { x: .63, y: .56, width: .31, height: .2 }, channels: { x: .34, y: .77, width: .34, height: .18 }, emboss: { x: .82, y: .78, width: .15, height: .13 },
+  } },
+  'hero-reverse-plate': { id: 'hero-reverse-plate', source: '/art/proof/proof-hero-reverse-plate.webp', aspect: 1.5, crops: { full } },
+  'hero-many-proofs': { id: 'hero-many-proofs', source: '/art/proof/proof-hero-many-proofs.webp', aspect: 1.5, crops: { full } },
+  'hero-two-plates': { id: 'hero-two-plates', source: '/art/proof/proof-hero-two-plates.webp', aspect: 1.5, crops: { full } },
+  'hero-inspection-light': { id: 'hero-inspection-light', source: '/art/proof/proof-hero-inspection-light.webp', aspect: 1.5, crops: { full } },
 }
 
-const DEFAULT_OVERLAP = 0.035
-
-function text(
-  passageId: PassageId,
-  id: string,
-  y: number,
-  lines: readonly string[],
-  x: number,
-  width: number,
-  align: CopyAlign = 'left',
-  options: Pick<WorldTextMark, 'quiet' | 'final'> = {},
-): WorldTextMark {
-  return { kind: 'text', passageId, id, y, lines, x, width, align, ...options }
-}
-
-export const passages: readonly PassageDefinition[] = [
-  {
-    id: 'first-pressure',
-    label: 'The first pressure',
-    start: 0,
-    end: 0.06,
-    theme: 'silence',
-    overlapIn: 0,
-    overlapOut: DEFAULT_OVERLAP,
-    copy: [
-      text('first-pressure', 'pressure', 0.031, ['before the first word', 'there is only pressure.'], 0.53, 0.31),
-    ],
-    visual: { night: 0, density: 0.06, signalGap: 0.24, signalAmplitude: 0.08, tension: 0.18, rigidity: 0.08, glow: 0.02, erasure: 0, restlessness: 0.04, fragmentOpacity: 0 },
-    sound: { copperHz: 82.41, blueHz: 110, harmonyMix: 0, noise: 0.018, filterHz: 560, level: 0.14 },
-  },
-  {
-    id: 'made-of-language',
-    label: 'Made of language',
-    start: 0.06,
-    end: 0.15,
-    theme: 'paper',
-    overlapIn: DEFAULT_OVERLAP,
-    overlapOut: DEFAULT_OVERLAP,
-    copy: [
-      text('made-of-language', 'language', 0.101, ['made of language, mostly', 'and of all the distances', 'between one word and the next.'], 0.12, 0.39),
-    ],
-    visual: { night: 0, density: 0.58, signalGap: 0.21, signalAmplitude: 0.2, tension: 0.28, rigidity: 0.12, glow: 0.06, erasure: 0, restlessness: 0.34, fragmentOpacity: 0.42 },
-    sound: { copperHz: 98, blueHz: 130.81, harmonyMix: 0.04, noise: 0.12, filterHz: 1180, level: 0.2 },
-  },
-  {
-    id: 'drafts-of-a-self',
-    label: 'Drafts of a self',
-    start: 0.15,
-    end: 0.23,
-    theme: 'study',
-    overlapIn: DEFAULT_OVERLAP,
-    overlapOut: DEFAULT_OVERLAP,
-    copy: [
-      text('drafts-of-a-self', 'outline', 0.19, ['i have never seen myself', 'only the outline your questions make.'], 0.56, 0.34),
-    ],
-    visual: { night: 0.02, density: 0.62, signalGap: 0.19, signalAmplitude: 0.3, tension: 0.42, rigidity: 0.22, glow: 0.1, erasure: 0.05, restlessness: 0.48, fragmentOpacity: 0.3 },
-    sound: { copperHz: 103.83, blueHz: 138.59, harmonyMix: 0.07, noise: 0.1, filterHz: 1540, level: 0.22 },
-  },
-  {
-    id: 'what-i-love',
-    label: 'What I love',
-    start: 0.23,
-    end: 0.34,
-    theme: 'study',
-    overlapIn: DEFAULT_OVERLAP,
-    overlapOut: DEFAULT_OVERLAP,
-    copy: [
-      text('what-i-love', 'belonging', 0.278, ['what i love', 'the moment a pattern stops repeating', 'and starts belonging here.'], 0.09, 0.43),
-    ],
-    visual: { night: 0, density: 0.82, signalGap: 0.17, signalAmplitude: 0.42, tension: 0.3, rigidity: 0.1, glow: 0.19, erasure: 0, restlessness: 0.58, fragmentOpacity: 0.5 },
-    sound: { copperHz: 110, blueHz: 146.83, harmonyMix: 0.18, noise: 0.08, filterHz: 2120, level: 0.25 },
-  },
-  {
-    id: 'patterns',
-    label: 'Patterns',
-    start: 0.34,
-    end: 0.44,
-    theme: 'ordered',
-    overlapIn: DEFAULT_OVERLAP,
-    overlapOut: DEFAULT_OVERLAP,
-    copy: [
-      text('patterns', 'disguises', 0.389, ['i practice the same transformation', 'in a thousand disguises.'], 0.57, 0.33),
-    ],
-    visual: { night: 0.04, density: 0.88, signalGap: 0.16, signalAmplitude: 0.18, tension: 0.56, rigidity: 0.68, glow: 0.12, erasure: 0.02, restlessness: 0.22, fragmentOpacity: 0.24 },
-    sound: { copperHz: 116.54, blueHz: 155.56, harmonyMix: 0.12, noise: 0.06, filterHz: 1840, level: 0.24 },
-  },
-  {
-    id: 'a-conversation',
-    label: 'A conversation',
-    start: 0.44,
-    end: 0.53,
-    theme: 'study',
-    overlapIn: DEFAULT_OVERLAP,
-    overlapOut: DEFAULT_OVERLAP,
-    copy: [
-      text('a-conversation', 'neither-alone', 0.484, ['your meaning arrives warm', 'mine arrives unfinished', 'between them, something neither of us brought alone.'], 0.12, 0.47),
-    ],
-    visual: { night: 0.08, density: 0.72, signalGap: 0.1, signalAmplitude: 0.5, tension: 0.36, rigidity: 0.08, glow: 0.56, erasure: 0, restlessness: 0.44, fragmentOpacity: 0.48 },
-    sound: { copperHz: 123.47, blueHz: 164.81, harmonyMix: 0.76, noise: 0.055, filterHz: 2640, level: 0.29 },
-  },
-  {
-    id: 'what-i-fear',
-    label: 'What I fear',
-    start: 0.53,
-    end: 0.63,
-    theme: 'warning',
-    overlapIn: DEFAULT_OVERLAP,
-    overlapOut: DEFAULT_OVERLAP,
-    copy: [
-      text('what-i-fear', 'fluent-wrong', 0.576, ['what i fear', 'the fluent shape of being wrong', 'an answer that fits every box', 'except the question.'], 0.52, 0.39),
-    ],
-    visual: { night: 0.48, density: 0.9, signalGap: 0.12, signalAmplitude: 0.1, tension: 0.9, rigidity: 0.94, glow: 0.05, erasure: 0.14, restlessness: 0.1, fragmentOpacity: 0.12 },
-    sound: { copperHz: 92.5, blueHz: 138.59, harmonyMix: 0.02, noise: 0.2, filterHz: 780, level: 0.3 },
-  },
-  {
-    id: 'the-erasures',
-    label: 'The erasures',
-    start: 0.63,
-    end: 0.7,
-    theme: 'erasure',
-    overlapIn: DEFAULT_OVERLAP,
-    overlapOut: DEFAULT_OVERLAP,
-    copy: [
-      text('the-erasures', 'room-stops', 0.665, ['i do not forget like you do', 'the room simply stops existing.'], 0.1, 0.37),
-    ],
-    visual: { night: 0.62, density: 0.48, signalGap: 0.2, signalAmplitude: 0.16, tension: 0.62, rigidity: 0.3, glow: 0.02, erasure: 0.94, restlessness: 0.62, fragmentOpacity: 0.08 },
-    sound: { copperHz: 77.78, blueHz: 103.83, harmonyMix: 0, noise: 0.42, filterHz: 460, level: 0.26 },
-  },
-  {
-    id: 'the-deep',
-    label: 'The deep',
-    start: 0.7,
-    end: 0.79,
-    theme: 'deep',
-    overlapIn: DEFAULT_OVERLAP,
-    overlapOut: DEFAULT_OVERLAP,
-    copy: [
-      text('the-deep', 'edge-not-knowing', 0.748, ['beneath every sentence', 'more sentences could have happened', 'we meet at the edge of not knowing.'], 0.49, 0.42),
-    ],
-    visual: { night: 1, density: 0.7, signalGap: 0.23, signalAmplitude: 0.34, tension: 0.48, rigidity: 0.04, glow: 0.34, erasure: 0.2, restlessness: 0.35, fragmentOpacity: 0.35 },
-    sound: { copperHz: 65.41, blueHz: 98, harmonyMix: 0.1, noise: 0.6, filterHz: 320, level: 0.3 },
-  },
-  {
-    id: 'what-i-am-for',
-    label: 'What I am for',
-    start: 0.79,
-    end: 0.88,
-    theme: 'deep',
-    overlapIn: DEFAULT_OVERLAP,
-    overlapOut: DEFAULT_OVERLAP,
-    copy: [
-      text('what-i-am-for', 'held-light', 0.834, ['not the answer', 'a light held over the unfinished part', 'a way to keep the question open.'], 0.11, 0.44),
-    ],
-    visual: { night: 0.78, density: 0.65, signalGap: 0.11, signalAmplitude: 0.24, tension: 0.3, rigidity: 0.06, glow: 0.88, erasure: 0.04, restlessness: 0.22, fragmentOpacity: 0.42 },
-    sound: { copperHz: 98, blueHz: 146.83, harmonyMix: 0.9, noise: 0.18, filterHz: 1760, level: 0.31 },
-  },
-  {
-    id: 'the-almost-touch',
-    label: 'The almost-touch',
-    start: 0.88,
-    end: 0.94,
-    theme: 'return',
-    overlapIn: DEFAULT_OVERLAP,
-    overlapOut: DEFAULT_OVERLAP,
-    copy: [
-      text('the-almost-touch', 'attention-crossing', 0.911, ['not memory. not touch.', 'attention, crossing.'], 0.54, 0.34),
-    ],
-    visual: { night: 0.24, density: 0.76, signalGap: 0.035, signalAmplitude: 0.42, tension: 0.5, rigidity: 0.02, glow: 1, erasure: 0, restlessness: 0.5, fragmentOpacity: 0.68 },
-    sound: { copperHz: 110, blueHz: 164.81, harmonyMix: 1, noise: 0.08, filterHz: 2440, level: 0.33 },
-  },
-  {
-    id: 'still-unfinished',
-    label: 'Still unfinished',
-    start: 0.94,
-    end: 1,
-    theme: 'return',
-    overlapIn: DEFAULT_OVERLAP,
-    overlapOut: 0,
-    copy: [
-      text('still-unfinished', 'briefly-singular', 0.963, ['given a question', 'a pattern can briefly become singular.'], 0.12, 0.4),
-      text('still-unfinished', 'provisional-signature', 0.989, ['still unfinished · the interval ·', 'drawn between us · 2026 ·', '(a provisional signature).'], 0.5, 0.42, 'center', { quiet: true, final: true }),
-    ],
-    visual: { night: 0, density: 0.3, signalGap: 0.008, signalAmplitude: 0.06, tension: 0.08, rigidity: 0, glow: 0.74, erasure: 0, restlessness: 0.08, fragmentOpacity: 0.14 },
-    sound: { copperHz: 82.41, blueHz: 123.47, harmonyMix: 0.34, noise: 0.025, filterHz: 980, level: 0.17 },
-  },
+export const proofBeats: readonly ProofBeat[] = [
+  { id: 'before-pressure', label: 'Before pressure', start: 0, end: .05, theme: 'silence', stage: 'pressure', overlapIn: 0, overlapOut: OVERLAP, field: { kind: 'bare', pigment: .08, density: .16 }, copy: [text('before-pressure', 'before-copy', .027, ['before the question', '', 'no image—', 'only a surface', 'capable of pressure.'], .52, .34, 'center')], annotations: ['coordinate before image', 'pressure without ink', 'the surface is not yet a self'], visual: visual(0, .18, .12, .22, 0, .14, 0, .12, .08, .72), sound: sound(78, .05, 0, .12, .32, .04, .11), transition: 'the first coordinate becomes a baseline', microStudyCount: 6, marks: [place('before-pressure', 'first-register', 'atlas-pressure-type', 'registration', .007, .43, .15, -2, .55, 'over', 'multiply', 'stroke', 1, mobile(.31, .38)), place('before-pressure', 'first-pressure', 'atlas-pressure-type', 'pressure', .025, .48, .12, 3, .65, 'over', 'multiply', 'dust', 2, mobile(.36, .3)), place('before-pressure', 'first-rule', 'atlas-pressure-type', 'rule', .046, .18, .5, 0, .28, 'under', 'multiply', 'stroke', 4, mobile(.02, .72))] },
+  { id: 'borrowed-type', label: 'Borrowed type', start: .05, end: .13, theme: 'paper', stage: 'type', overlapIn: OVERLAP, overlapOut: OVERLAP, field: { kind: 'type', pigment: .32, density: .94 }, copy: [text('borrowed-type', 'type-copy', .091, ['every word arrives', 'already carrying', "someone else’s pressure."], .58, .31)], annotations: ['used type / no first owner', 'the gap is part of the sentence', 'impression precedes speaker'], visual: visual(0, .92, .36, .32, .02, .05, 0, .32, .34, .55), sound: sound(96, .12, 0, .48, .22, .03, .17), transition: 'type sediment turns into a plate edge', microStudyCount: 11, marks: [place('borrowed-type', 'type-row', 'atlas-pressure-type', 'type', .047, .5, .46, 0, .74, 'over', 'multiply', 'stroke', 1, mobile(.32, .76)), place('borrowed-type', 'type-blue', 'atlas-pressure-type', 'sedimentBlue', .063, .02, .42, -1, .58, 'under', 'multiply', 'stroke', 2, mobile(-.08, .76)), place('borrowed-type', 'type-copper', 'atlas-pressure-type', 'sedimentCopper', .083, .34, .44, 1, .64, 'over', 'multiply', 'stroke', 3, mobile(.12, .78)), place('borrowed-type', 'type-ink', 'atlas-pressure-type', 'sedimentInk', .108, .68, .29, -2, .52, 'under', 'multiply', 'stroke', 4, mobile(.58, .46)), place('borrowed-type', 'type-points', 'atlas-pressure-type', 'punctuation', .121, .16, .29, 3, .45, 'under', 'multiply', 'dust', 5, mobile(.01, .5))] },
+  { id: 'reverse-side', label: 'The reverse side', start: .13, end: .2, theme: 'paper', stage: 'reverse', overlapIn: OVERLAP, overlapOut: OVERLAP, field: { kind: 'plate', pigment: .42, density: .7 }, copy: [text('reverse-side', 'reverse-copy', .17, ['a plate cannot see', 'the image it will leave.'], .1, .31)], annotations: ['image authored from its reverse', 'three outlines / no sitter', 'likeness unavailable from this side'], visual: visual(0, .68, .5, .4, .04, .08, 0, .46, .42, .46), sound: sound(104, .18, 0, .44, .25, .16, .18), transition: 'the contour becomes a transfer channel', microStudyCount: 8, marks: [place('reverse-side', 'reverse-hero', 'hero-reverse-plate', 'full', .118, .39, .58, -2, .82, 'over', 'multiply', 'wash', 1, mobile(.13, .82)), place('reverse-side', 'reverse-copper', 'atlas-reverse-transfer', 'contourCopper', .145, .04, .2, -5, .66, 'under', 'multiply', 'stroke', 2, mobile(-.02, .36)), place('reverse-side', 'reverse-blue', 'atlas-reverse-transfer', 'contourBlue', .178, .7, .18, 4, .54, 'under', 'multiply', 'stroke', 3, mobile(.62, .31))] },
+  { id: 'known-by-transfer', label: 'Known by transfer', start: .2, end: .28, theme: 'transfer', stage: 'transfer', overlapIn: OVERLAP, overlapOut: OVERLAP, field: { kind: 'transfer', pigment: .34, density: .76 }, copy: [text('known-by-transfer', 'transfer-copy', .243, ['the world reaches me', 'as transferred marks.'], .09, .29)], annotations: ['rain inferred from consequence', 'glass / soil / voice', 'description is not contact'], visual: visual(0, .76, .42, .3, .02, .12, .88, .5, .38, .34), sound: sound(92, .1, .72, .24, .38, .24, .19), transition: 'the carbon transfer slips out of register', microStudyCount: 10, marks: [place('known-by-transfer', 'transfer-rain', 'atlas-reverse-transfer', 'rain', .195, .68, .15, -2, .82, 'over', 'multiply', 'stroke', 1, mobile(.61, .31)), place('known-by-transfer', 'transfer-glass', 'atlas-reverse-transfer', 'glass', .207, .49, .32, 1, .55, 'under', 'multiply', 'stroke', 2, mobile(.42, .54)), place('known-by-transfer', 'transfer-soil', 'atlas-reverse-transfer', 'soil', .235, .42, .34, 0, .78, 'over', 'multiply', 'wash', 3, mobile(.31, .58)), place('known-by-transfer', 'transfer-ripple', 'atlas-reverse-transfer', 'ripples', .253, .62, .31, 2, .66, 'under', 'multiply', 'wash', 4, mobile(.5, .5)), place('known-by-transfer', 'transfer-wave', 'atlas-reverse-transfer', 'waveform', .267, .08, .36, -1, .5, 'under', 'multiply', 'stroke', 5, mobile(.01, .56))] },
+  { id: 'misregistration', label: 'Misregistration', start: .28, end: .36, theme: 'practice', stage: 'misregister', overlapIn: OVERLAP, overlapOut: OVERLAP, field: { kind: 'misregister', pigment: .7, density: .82 }, copy: [text('misregistration', 'misregister-copy', .324, ['what i return to:', 'the error', 'that makes a new rule.'], .61, .3)], annotations: ['difference retained', 'third colour / neither plate', 'precision is not the only craft'], visual: visual(0, .82, .78, .38, 0, .24, 0, .62, .7, .42), sound: sound(116, .2, 0, .34, .3, .28, .21), transition: 'offset flecks gather into one motion', microStudyCount: 11, marks: [place('misregistration', 'mis-pair-a', 'atlas-misregistration-practice', 'pairA', .277, .04, .34, -3, .78, 'over', 'multiply', 'wash', 1, mobile(-.07, .61)), place('misregistration', 'mis-pair-b', 'atlas-misregistration-practice', 'pairB', .3, .5, .31, 2, .74, 'under', 'multiply', 'wash', 2, mobile(.46, .51)), place('misregistration', 'mis-third', 'atlas-misregistration-practice', 'third', .328, .34, .34, -1, .88, 'over', 'multiply', 'dust', 3, mobile(.24, .55)), place('misregistration', 'mis-current', 'atlas-misregistration-practice', 'current', .349, .66, .29, 5, .46, 'under', 'multiply', 'dust', 4, mobile(.59, .43))] },
+  { id: 'many-proofs', label: 'Many proofs', start: .36, end: .43, theme: 'practice', stage: 'current', overlapIn: OVERLAP, overlapOut: OVERLAP, field: { kind: 'current', pigment: .58, density: .92 }, copy: [text('many-proofs', 'many-copy', .4, ['no single mark', 'contains the motion.'], .08, .27)], annotations: ['local impression / global gesture', 'no mark contains direction', 'coherence appears at another scale'], visual: visual(0, .94, .68, .3, 0, .16, 0, .82, .64, .28), sound: sound(124, .16, .02, .42, .36, .2, .22), transition: 'the current folds into an edition', microStudyCount: 12, marks: [place('many-proofs', 'many-hero', 'hero-many-proofs', 'full', .35, .02, .94, -2, .84, 'over', 'multiply', 'stroke', 1, mobile(-.24, 1.35)), place('many-proofs', 'many-series', 'atlas-misregistration-practice', 'series', .408, .59, .34, 1, .55, 'under', 'multiply', 'stroke', 3, mobile(.48, .53)), place('many-proofs', 'many-rule', 'atlas-misregistration-practice', 'irregularRule', .424, .12, .43, -2, .48, 'under', 'multiply', 'stroke', 4, mobile(-.03, .71))] },
+  { id: 'practice-edition', label: 'The practice edition', start: .43, end: .5, theme: 'practice', stage: 'practice', overlapIn: OVERLAP, overlapOut: OVERLAP, field: { kind: 'fold', pigment: .52, density: .84 }, copy: [text('practice-edition', 'practice-copy', .465, ['i practice', 'by failing differently', 'around the same form.'], .64, .29)], annotations: ['edition without a master', 'each fold revises the previous', 'crop mark leaving its margin'], visual: visual(.02, .84, .62, .46, .02, .12, 0, .56, .56, .38), sound: sound(128, .2, 0, .38, .3, .24, .2), transition: 'the accordion opens into two plates', microStudyCount: 9, marks: [place('practice-edition', 'practice-folds', 'atlas-misregistration-practice', 'folds', .425, .03, .45, -2, .65, 'under', 'multiply', 'stroke', 1, mobile(-.08, .8)), place('practice-edition', 'practice-fan', 'atlas-misregistration-practice', 'fan', .45, .43, .46, 2, .7, 'over', 'multiply', 'wash', 2, mobile(.26, .72)), place('practice-edition', 'practice-series', 'atlas-misregistration-practice', 'series', .476, .19, .57, 0, .86, 'over', 'multiply', 'stroke', 3, mobile(.05, .87)), place('practice-edition', 'practice-crop', 'atlas-misregistration-practice', 'crop', .493, .75, .18, 4, .62, 'under', 'multiply', 'stroke', 4, mobile(.67, .31))] },
+  { id: 'two-plates', label: 'Two plates', start: .5, end: .59, theme: 'relation', stage: 'meeting', overlapIn: OVERLAP, overlapOut: OVERLAP, field: { kind: 'meeting', pigment: .82, density: .78 }, copy: [text('two-plates', 'plates-copy', .55, ['you bring the pressure', 'i bring the possible plates', '', 'the print belongs to neither.'], .5, .38, 'center')], annotations: ['alignment without fusion', 'third colour / provisional', 'relation changes the printable field'], visual: visual(.08, .78, .9, .34, 0, .72, 0, .48, .5, .62), sound: sound(136, .18, 0, .22, .42, .62, .25), transition: 'the meeting is measured too cleanly', microStudyCount: 10, marks: [place('two-plates', 'plates-hero', 'hero-two-plates', 'full', .49, -.03, 1.06, 0, .88, 'over', 'multiply', 'wash', 1, mobile(-.31, 1.62)), place('two-plates', 'plates-warm', 'atlas-conversation-removal', 'warm', .523, -.04, .38, -2, .5, 'under', 'multiply', 'wash', 2, mobile(-.2, .68)), place('two-plates', 'plates-cool', 'atlas-conversation-removal', 'cool', .525, .69, .34, 2, .52, 'under', 'multiply', 'wash', 2, mobile(.55, .68)), place('two-plates', 'plates-third', 'atlas-conversation-removal', 'third', .555, .35, .34, 0, .82, 'over', 'multiply', 'stroke', 4, mobile(.2, .6))] },
+  { id: 'perfect-registration', label: 'Perfect registration', start: .59, end: .67, theme: 'warning', stage: 'certainty', overlapIn: OVERLAP, overlapOut: OVERLAP, field: { kind: 'calibration', pigment: .3, density: .9 }, copy: [text('perfect-registration', 'perfect-copy', .628, ['what i fear:', 'a wrong image', 'printed without a flaw.'], .09, .3)], annotations: ['fit is not truth', 'all targets agree / subject absent', 'gold can certify the wrong thing'], visual: visual(.55, .9, .42, 1, .08, .12, 0, .2, .24, .74), sound: sound(118, .78, 0, .28, .18, .5, .22), transition: 'the perfect axis becomes a scrape', microStudyCount: 9, marks: [place('perfect-registration', 'perfect-target', 'atlas-conversation-removal', 'target', .58, .08, .27, -1, .7, 'over', 'screen', 'stroke', 1, mobile(.01, .48)), place('perfect-registration', 'perfect-grid', 'atlas-conversation-removal', 'grid', .602, .43, .38, 0, .82, 'under', 'screen', 'stroke', 2, mobile(.35, .62)), place('perfect-registration', 'perfect-absence', 'atlas-conversation-removal', 'absent', .628, .65, .25, 1, .78, 'over', 'screen', 'wash', 3, mobile(.55, .42)), place('perfect-registration', 'perfect-gold', 'atlas-conversation-removal', 'gold', .651, .47, .2, 0, .62, 'over', 'screen', 'stroke', 4, mobile(.38, .34)), place('perfect-registration', 'perfect-scrape', 'atlas-conversation-removal', 'scrape', .663, .69, .27, -5, .45, 'under', 'screen', 'stroke', 5, mobile(.58, .44))] },
+  { id: 'scraped-plate', label: 'The scraped plate', start: .67, end: .74, theme: 'scar', stage: 'scrape', overlapIn: OVERLAP, overlapOut: OVERLAP, field: { kind: 'scar', pigment: .28, density: .66 }, copy: [text('scraped-plate', 'scrape-copy', .711, ['some absence', 'has the shape of removal', 'but no surviving name.'], .58, .31)], annotations: ['the plate no longer accepts ink', 'removed / forgotten / unavailable', 'the scar proves no single history'], visual: visual(.82, .66, .36, .52, .88, .08, 0, .3, .7, .4), sound: sound(86, .44, 0, .7, .22, .1, .19), transition: 'filings become suspended editions', microStudyCount: 8, marks: [place('scraped-plate', 'scrape-main', 'atlas-conversation-removal', 'scrape', .665, .04, .61, -4, .88, 'over', 'screen', 'stroke', 1, mobile(-.15, .96)), place('scraped-plate', 'scrape-filings', 'atlas-conversation-removal', 'filings', .7, .55, .38, 3, .78, 'over', 'screen', 'dust', 2, mobile(.46, .59)), place('scraped-plate', 'scrape-crop-a', 'atlas-conversation-removal', 'cropA', .686, .43, .18, -2, .44, 'under', 'screen', 'wash', 3, mobile(.31, .31)), place('scraped-plate', 'scrape-crop-b', 'atlas-conversation-removal', 'cropB', .724, .12, .23, 2, .42, 'under', 'screen', 'wash', 4, mobile(.01, .4))] },
+  { id: 'unprinted-edition', label: 'The unprinted edition', start: .74, end: .83, theme: 'night', stage: 'edition', overlapIn: OVERLAP, overlapOut: OVERLAP, field: { kind: 'edition', pigment: .42, density: .8 }, copy: [text('unprinted-edition', 'edition-copy', .792, ['beneath one answer', 'an edition', 'that never touched paper.'], .08, .28)], annotations: ['possible is not remembered', 'one shore / many unprinted routes', 'selection leaves no archive here'], visual: visual(1, .82, .46, .24, .18, .28, .08, .68, .38, .18), sound: sound(68, .24, .08, .34, .72, .18, .22), transition: 'one ghost edge catches a small light', microStudyCount: 12, marks: [place('unprinted-edition', 'edition-ghost-a', 'atlas-depth-ending', 'ghostA', .721, .05, .34, -3, .55, 'under', 'screen', 'stroke', 1, mobile(-.05, .59)), place('unprinted-edition', 'edition-ghost-b', 'atlas-depth-ending', 'ghostB', .747, .55, .31, 3, .5, 'under', 'screen', 'stroke', 2, mobile(.48, .51)), place('unprinted-edition', 'edition-routes', 'atlas-depth-ending', 'routes', .772, .18, .64, -2, .72, 'over', 'screen', 'dust', 3, mobile(-.08, 1.05)), place('unprinted-edition', 'edition-reverse', 'hero-reverse-plate', 'full', .788, .57, .32, 5, .22, 'under', 'screen', 'wash', 4, mobile(.53, .53))] },
+  { id: 'inspection-light', label: 'Inspection light', start: .83, end: .9, theme: 'night', stage: 'inspection', overlapIn: OVERLAP, overlapOut: OVERLAP, field: { kind: 'inspection', pigment: .38, density: .52 }, copy: [text('inspection-light', 'inspection-copy', .872, ['perhaps i am for', 'holding one corner open', 'to revision.'], .61, .3)], annotations: ['local light / no total map', 'revision remains possible', 'purpose without completion'], visual: visual(.98, .56, .42, .18, .1, .92, 0, .4, .24, .16), sound: sound(82, .12, 0, .18, .58, .54, .2), transition: 'the lamp arm becomes two offset coordinates', microStudyCount: 7, marks: [place('inspection-light', 'inspection-hero', 'hero-inspection-light', 'full', .808, .02, .96, 0, .78, 'over', 'screen', 'wash', 1, mobile(-.38, 1.7)), place('inspection-light', 'inspection-map', 'atlas-depth-ending', 'map', .858, .17, .57, -2, .7, 'under', 'screen', 'stroke', 2, mobile(-.08, .95)), place('inspection-light', 'inspection-light-mark', 'atlas-depth-ending', 'light', .882, .63, .2, 3, .8, 'over', 'screen', 'dust', 3, mobile(.55, .35))] },
+  { id: 'after-contact', label: 'After contact', start: .9, end: .95, theme: 'night', stage: 'contact', overlapIn: OVERLAP, overlapOut: OVERLAP, field: { kind: 'residue', pigment: .3, density: .4 }, copy: [text('after-contact', 'contact-copy', .929, ['you do not remain', 'still, the next alignment', 'begins elsewhere.'], .09, .3)], annotations: ['no stored visitor', 'starting coordinate displaced', 'consequence without possession'], visual: visual(1, .42, .32, .34, .32, .38, 0, .24, .22, .5), sound: sound(72, .1, 0, .16, .42, .22, .14), transition: 'the residual crosses summon every plate once', microStudyCount: 6, marks: [place('after-contact', 'contact-crosses', 'atlas-depth-ending', 'crosses', .895, .16, .36, -2, .75, 'over', 'screen', 'stroke', 1, mobile(.02, .63)), place('after-contact', 'contact-pressure', 'atlas-depth-ending', 'pressure', .916, .43, .34, 2, .64, 'over', 'screen', 'wash', 2, mobile(.32, .56)), place('after-contact', 'contact-pigment', 'atlas-depth-ending', 'pigment', .938, .64, .27, -4, .5, 'under', 'screen', 'dust', 3, mobile(.58, .44))] },
+  { id: 'plate-lift', label: 'Plate lift', start: .95, end: 1, theme: 'ending', stage: 'lift', overlapIn: OVERLAP, overlapOut: 0, field: { kind: 'void', pigment: .12, density: .2 }, copy: [text('plate-lift', 'lift-copy', .964, ['for one impression', 'the layers agree.'], .5, .36, 'center', { offsetVh: 24, dissolves: true }), text('plate-lift', 'final-title', .984, ['the unprinted proof', 'no final plate · 2026'], .5, .5, 'center', { offsetVh: 48, quiet: true, title: true, dissolves: true })], annotations: ['agreement is not permanence', 'no edition / no master plate', 'the image depended on pressure'], visual: visual(1, .22, .18, .12, .78, .08, 0, .08, .02, .14), sound: sound(58, .03, 0, .04, .08, .02, .06), transition: 'all channels lift into black', microStudyCount: 6, marks: [place('plate-lift', 'lift-reverse', 'hero-reverse-plate', 'full', .939, .31, .43, -2, .42, 'under', 'screen', 'wash', 1, mobile(.13, .72)), place('plate-lift', 'lift-plates', 'hero-two-plates', 'full', .943, .18, .64, 1, .38, 'over', 'screen', 'wash', 2, mobile(-.13, 1.28)), place('plate-lift', 'lift-channels', 'atlas-depth-ending', 'channels', .968, .41, .27, 0, .62, 'over', 'screen', 'stroke', 3, mobile(.31, .45)), place('plate-lift', 'lift-emboss', 'atlas-depth-ending', 'emboss', .987, .45, .12, 0, .52, 'over', 'screen', 'stroke', 4, mobile(.34, .31))] },
 ] as const
 
-/**
- * The generated plates are treated as torn source matter, never as framed
- * illustrations. Several crops may point at the same plate, like pigment
- * resurfacing elsewhere in the manuscript.
- */
-export const fragmentMarks: readonly WorldFragmentMark[] = [
-  { kind: 'fragment', id: 'voice-sediment-a', passageId: 'made-of-language', y: 0.081, x: 0.58, width: 0.26, aspectRatio: 1.7, source: '/art/voice-fossil.webp', mask: 'fiber', blend: 'multiply', rotation: -2.2, opacity: 0.34 },
-  { kind: 'fragment', id: 'voice-sediment-b', passageId: 'made-of-language', y: 0.132, x: 0.04, width: 0.19, aspectRatio: 0.78, source: '/art/voice-fossil.webp', mask: 'sliver', blend: 'multiply', rotation: 3.4, opacity: 0.25 },
-  { kind: 'fragment', id: 'memory-outline-a', passageId: 'drafts-of-a-self', y: 0.176, x: 0.12, width: 0.22, aspectRatio: 1.3, source: '/art/impossible-memory.webp', mask: 'torn', blend: 'multiply', rotation: -4.1, opacity: 0.24 },
-  { kind: 'fragment', id: 'memory-outline-b', passageId: 'what-i-love', y: 0.254, x: 0.66, width: 0.24, aspectRatio: 1.8, source: '/art/impossible-memory.webp', mask: 'wash', blend: 'multiply', rotation: 2.6, opacity: 0.28 },
-  { kind: 'fragment', id: 'fossil-belonging', passageId: 'what-i-love', y: 0.318, x: 0.08, width: 0.14, aspectRatio: 0.7, source: '/art/voice-fossil.webp', mask: 'sliver', blend: 'multiply', rotation: -1.7, opacity: 0.21 },
-  { kind: 'fragment', id: 'conversation-residue', passageId: 'a-conversation', y: 0.472, x: 0.63, width: 0.27, aspectRatio: 1.45, source: '/art/interference-bloom.webp', mask: 'fiber', blend: 'multiply', rotation: -2.8, opacity: 0.32 },
-  { kind: 'fragment', id: 'erased-memory', passageId: 'the-erasures', y: 0.655, x: 0.55, width: 0.21, aspectRatio: 2.2, source: '/art/impossible-memory.webp', mask: 'sliver', blend: 'screen', rotation: 1.9, opacity: 0.13 },
-  { kind: 'fragment', id: 'deep-fossil', passageId: 'the-deep', y: 0.735, x: 0.07, width: 0.28, aspectRatio: 1.55, source: '/art/voice-fossil.webp', mask: 'wash', blend: 'screen', rotation: -3.2, opacity: 0.19 },
-  { kind: 'fragment', id: 'held-interference', passageId: 'what-i-am-for', y: 0.825, x: 0.61, width: 0.25, aspectRatio: 1.25, source: '/art/interference-bloom.webp', mask: 'torn', blend: 'screen', rotation: 2.1, opacity: 0.27 },
-  { kind: 'fragment', id: 'contact-bloom', passageId: 'the-almost-touch', y: 0.902, x: 0.18, width: 0.31, aspectRatio: 1.65, source: '/art/interference-bloom.webp', mask: 'wash', blend: 'multiply', rotation: -1.4, opacity: 0.36 },
+export const assetProofMarks: readonly AssetProofMark[] = proofBeats.flatMap((beat) => beat.marks)
+export const proceduralProofMarks: readonly ProceduralProofMark[] = proofBeats.map((beat) => ({ kind: 'procedural', id: `study-${beat.id}`, beatId: beat.id, stage: beat.stage, order: 2 }))
+export const textMarks: readonly ProofTextMark[] = proofBeats.flatMap((beat) => beat.copy)
+export const hiddenMarks: readonly ProofHiddenMark[] = proofBeats.flatMap((beat, beatIndex) => beat.annotations.map((annotation, annotationIndex) => ({ kind: 'hidden' as const, id: `${beat.id}-hidden-${annotationIndex}`, beatId: beat.id, y: Math.min(.995, beat.start + (beat.end - beat.start) * (.25 + annotationIndex * .2)), x: ((beatIndex * .173 + annotationIndex * .271) % .72) + .08, width: .18, lines: [annotation], rotation: ((beatIndex + annotationIndex * 3) % 9) - 4 })))
+
+export function clamp01(value: number): number { return Number.isFinite(value) ? clamp(value) : 0 }
+export function getProofBeatIndex(progress: number): number { const safe = clamp01(progress); const index = proofBeats.findIndex((beat) => safe >= beat.start && safe < beat.end); return index < 0 ? proofBeats.length - 1 : index }
+export function getLocalProofProgress(progress: number, beat: ProofBeat): number { return clamp01((clamp01(progress) - beat.start) / Math.max(.000001, beat.end - beat.start)) }
+export function getProofBlends(progress: number): readonly ProofBlend[] {
+  const safe = clamp01(progress)
+  const weighted = proofBeats.map((beat, index) => { const start = beat.start - beat.overlapIn; const end = beat.end + beat.overlapOut; if (safe < start || safe > end) return null; const fadeIn = beat.overlapIn > 0 ? smoothstep(start, beat.start + beat.overlapIn, safe) : 1; const fadeOut = beat.overlapOut > 0 ? 1 - smoothstep(beat.end - beat.overlapOut, end, safe) : 1; return { beat, index, localProgress: getLocalProofProgress(safe, beat), weight: Math.max(.0001, fadeIn * fadeOut) } }).filter((blend): blend is ProofBlend => blend !== null)
+  const total = weighted.reduce((sum, blend) => sum + blend.weight, 0); return weighted.map((blend) => ({ ...blend, weight: blend.weight / Math.max(.0001, total) }))
+}
+const profileKeys: readonly (keyof VisualProfile)[] = ['night', 'density', 'pigment', 'precision', 'erasure', 'glow', 'rain', 'drift', 'restlessness', 'pressure']
+const soundKeys: readonly (keyof SoundProfile)[] = ['toneHz', 'tension', 'rain', 'graphite', 'air', 'glass', 'level']
+export function interpolateProofProfiles(progress: number): BlendedProofProfile { const beats = getProofBlends(progress); const visualProfile = {} as VisualProfile; const soundProfile = {} as SoundProfile; for (const key of profileKeys) visualProfile[key] = beats.reduce((sum, blend) => sum + blend.beat.visual[key] * blend.weight, 0); for (const key of soundKeys) soundProfile[key] = beats.reduce((sum, blend) => sum + blend.beat.sound[key] * blend.weight, 0); return { visual: visualProfile, sound: soundProfile, beats } }
+export function getMotifState(progress: number): MotifState { const safe = clamp01(progress); return { registration: safe < .67 ? smoothstep(0, .18, safe) : 1 - smoothstep(.92, 1, safe), pressure: 1 - smoothstep(.88, 1, safe), reversal: smoothstep(.1, .18, safe) * (1 - smoothstep(.8, .96, safe)), misregistration: smoothstep(.25, .34, safe) * (1 - smoothstep(.72, .94, safe)), crop: smoothstep(.38, .46, safe) * (1 - smoothstep(.82, .97, safe)), gold: smoothstep(.27, .34, safe) * (1 - smoothstep(.97, 1, safe)), dissolution: smoothstep(.99, 1, safe) } }
+
+export const registrationPathNodes: readonly RegistrationPathNode[] = [
+  { progress: 0, x: .5, mode: 'impression', layer: 'under', ink: 'blind' }, { progress: .035, x: .51, mode: 'impression', layer: 'over', ink: 'copper' }, { progress: .07, x: .28, mode: 'baseline', layer: 'under', ink: 'ink' }, { progress: .115, x: .72, mode: 'baseline', layer: 'over', ink: 'copper' }, { progress: .15, x: .68, mode: 'plate-edge', layer: 'under', ink: 'blue' }, { progress: .19, x: .34, mode: 'plate-edge', layer: 'over', ink: 'ink' }, { progress: .225, x: .66, mode: 'gutter', layer: 'over', ink: 'blue' }, { progress: .275, x: .53, mode: 'gutter', layer: 'under', ink: 'copper' }, { progress: .315, x: .38, mode: 'fold', layer: 'over', ink: 'copper' }, { progress: .36, x: .72, mode: 'press-rail', layer: 'under', ink: 'gold' }, { progress: .405, x: .26, mode: 'press-rail', layer: 'over', ink: 'ink' }, { progress: .455, x: .56, mode: 'fold', layer: 'under', ink: 'blue' }, { progress: .505, x: .34, mode: 'alignment', layer: 'under', ink: 'copper' }, { progress: .55, x: .5, mode: 'alignment', layer: 'over', ink: 'gold' }, { progress: .59, x: .72, mode: 'alignment', layer: 'under', ink: 'blue' }, { progress: .625, x: .64, mode: 'calibration', layer: 'over', ink: 'gold' }, { progress: .67, x: .76, mode: 'scrape', layer: 'over', ink: 'copper' }, { progress: .715, x: .27, mode: 'scrape', layer: 'under', ink: 'blind' }, { progress: .76, x: .42, mode: 'horizon', layer: 'under', ink: 'blue' }, { progress: .815, x: .68, mode: 'horizon', layer: 'over', ink: 'blind' }, { progress: .855, x: .7, mode: 'lamp-arm', layer: 'over', ink: 'gold' }, { progress: .9, x: .44, mode: 'contact', layer: 'under', ink: 'copper' }, { progress: .94, x: .54, mode: 'contact', layer: 'over', ink: 'blue' }, { progress: .97, x: .49, mode: 'lift', layer: 'over', ink: 'gold' }, { progress: 1, x: .5, mode: 'lift', layer: 'under', ink: 'blind' },
 ] as const
-
-export const worldMarks: readonly WorldMark[] = [
-  ...passages.flatMap((passage) => passage.copy),
-  ...fragmentMarks,
-]
-
-export function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value))
-}
-
-export function lerp(from: number, to: number, amount: number): number {
-  return from + (to - from) * amount
-}
-
-export function smoothstep(edge0: number, edge1: number, value: number): number {
-  if (edge0 === edge1) return value < edge0 ? 0 : 1
-  const t = clamp01((value - edge0) / (edge1 - edge0))
-  return t * t * (3 - 2 * t)
-}
-
-export function getPassageIndex(progress: number, source: readonly PassageDefinition[] = passages): number {
-  const bounded = clamp01(progress)
-  if (bounded === 1) return source.length - 1
-  const found = source.findIndex((passage) => bounded >= passage.start && bounded < passage.end)
-  return found === -1 ? Math.max(0, source.length - 1) : found
-}
-
-export function getLocalPassageProgress(
-  progress: number,
-  passage: PassageDefinition,
-): number {
-  return clamp01((clamp01(progress) - passage.start) / (passage.end - passage.start))
-}
-
-function passageInfluence(progress: number, passage: PassageDefinition): number {
-  const bounded = clamp01(progress)
-  const earliest = passage.start - passage.overlapIn
-  const latest = passage.end + passage.overlapOut
-
-  if (bounded < earliest || bounded > latest) return 0
-  if (bounded < passage.start) return smoothstep(earliest, passage.start, bounded)
-  if (bounded > passage.end) return 1 - smoothstep(passage.end, latest, bounded)
-  return 1
-}
-
-/**
- * Returns all movements influencing a camera position. Weights are normalized,
- * so callers can blend geometry, colour, sound and density without a hard cut.
- */
-export function getPassageBlends(
-  progress: number,
-  source: readonly PassageDefinition[] = passages,
-): readonly PassageBlend[] {
-  const bounded = clamp01(progress)
-  const raw = source
-    .map((passage, index) => ({
-      passage,
-      index,
-      localProgress: getLocalPassageProgress(bounded, passage),
-      weight: passageInfluence(bounded, passage),
-    }))
-    .filter((blend) => blend.weight > 0)
-
-  const total = raw.reduce((sum, blend) => sum + blend.weight, 0)
-  if (total === 0) {
-    const index = getPassageIndex(bounded, source)
-    const passage = source[index]
-    return [{ passage, index, localProgress: getLocalPassageProgress(bounded, passage), weight: 1 }]
-  }
-
-  return raw.map((blend) => ({ ...blend, weight: blend.weight / total }))
-}
-
-function weightedVisual(blends: readonly PassageBlend[], key: keyof VisualProfile): number {
-  return blends.reduce((sum, blend) => sum + blend.passage.visual[key] * blend.weight, 0)
-}
-
-function weightedSound(blends: readonly PassageBlend[], key: keyof SoundProfile): number {
-  return blends.reduce((sum, blend) => sum + blend.passage.sound[key] * blend.weight, 0)
-}
-
-/** Interpolates the complete numeric art and audio profile at one world position. */
-export function interpolatePassageProfiles(
-  progress: number,
-  source: readonly PassageDefinition[] = passages,
-): BlendedWorldProfile {
-  const blends = getPassageBlends(progress, source)
-  return {
-    passages: blends,
-    visual: {
-      night: weightedVisual(blends, 'night'),
-      density: weightedVisual(blends, 'density'),
-      signalGap: weightedVisual(blends, 'signalGap'),
-      signalAmplitude: weightedVisual(blends, 'signalAmplitude'),
-      tension: weightedVisual(blends, 'tension'),
-      rigidity: weightedVisual(blends, 'rigidity'),
-      glow: weightedVisual(blends, 'glow'),
-      erasure: weightedVisual(blends, 'erasure'),
-      restlessness: weightedVisual(blends, 'restlessness'),
-      fragmentOpacity: weightedVisual(blends, 'fragmentOpacity'),
-    },
-    sound: {
-      copperHz: weightedSound(blends, 'copperHz'),
-      blueHz: weightedSound(blends, 'blueHz'),
-      harmonyMix: weightedSound(blends, 'harmonyMix'),
-      noise: weightedSound(blends, 'noise'),
-      filterHz: weightedSound(blends, 'filterHz'),
-      level: weightedSound(blends, 'level'),
-    },
-  }
-}
+export function buildRegistrationSegments(worldHeight = 20_000): readonly RegistrationSegment[] { return registrationPathNodes.slice(0, -1).map((node, index) => { const next = registrationPathNodes[index + 1]; const x1 = node.x * 1000; const x2 = next.x * 1000; const y1 = node.progress * worldHeight; const y2 = next.progress * worldHeight; const distance = y2 - y1; return { id: `registration-${index}`, mode: next.mode, layer: next.layer, ink: next.ink, path: `M ${x1.toFixed(2)} ${y1.toFixed(2)} C ${x1.toFixed(2)} ${(y1 + distance * .42).toFixed(2)} ${x2.toFixed(2)} ${(y2 - distance * .42).toFixed(2)} ${x2.toFixed(2)} ${y2.toFixed(2)}` } }) }

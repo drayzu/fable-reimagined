@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rain Splash — Standalone</title>
+<style>
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: rgb(230,230,230);
+  }
+
+  body {
+    display: grid;
+    place-items: center;
+  }
+
+  canvas {
+    display: block;
+    width: min(100vw, 100vh);
+    height: min(100vw, 100vh);
+    background: rgb(230,230,230);
+  }
+</style>
+</head>
+<body>
+<canvas id="canvas" width="900" height="900"></canvas>
+
+<script>
+(() => {
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+
+  const width = canvas.width;
+  const height = canvas.height;
+  const TAU = Math.PI * 2;
+
+  let effects = [];
+  let frameCount = 0;
+
+  const colors = [
+    "#eac435",
+    "#345995",
+    "#e40066",
+    "#fb4d3d",
+    "#000000"
+  ];
+
+  function random(a = 1, b) {
+    if (Array.isArray(a)) {
+      return a[Math.floor(Math.random() * a.length)];
+    }
+
+    if (b === undefined) {
+      return Math.random() * a;
+    }
+
+    return a + Math.random() * (b - a);
+  }
+
+  function int(x) {
+    return Math.floor(x);
+  }
+
+  function easeOutCubic(x) {
+    return 1 - Math.pow(1 - x, 3);
+  }
+
+  function easeOutExpo(x) {
+    return x === 1 ? 1 : 1 - Math.pow(2, -10 * x);
+  }
+
+  function easeInQuart(x) {
+    return x * x * x * x;
+  }
+
+  class Agent {
+    constructor(x, y, lifeSpan) {
+      this.x = x;
+      this.y = y;
+      this.isDead = false;
+      this.lifeSpan = lifeSpan;
+      this.life = lifeSpan;
+      this.amount = 0;
+    }
+
+    show() {}
+    move() {}
+
+    update() {
+      this.amount = 1 - this.life / this.lifeSpan;
+      this.amount = Math.max(0, Math.min(1, this.amount));
+    }
+
+    checkLife() {
+      this.life--;
+      if (this.life <= 0) {
+        this.life = 0;
+        this.isDead = true;
+      }
+    }
+
+    run() {
+      this.show();
+      this.move();
+      this.checkLife();
+      this.update();
+    }
+  }
+
+  class Splash extends Agent {
+    constructor(x, y, l, clr) {
+      super(x, y, l);
+
+      this.shapeType = int(random(4));
+      this.w = width * random(0.05, 0.01);
+
+      const r = this.w * random(1, 4);
+      const a = random(TAU);
+
+      this.xShift = r * Math.cos(a);
+      this.yShift = r * Math.sin(a);
+
+      // Igual que el código original:
+      // cada partícula elige su propio color.
+      this.clr = random(colors);
+
+      this.revo = TAU * random(10) * random(-1, 1);
+    }
+
+    show() {
+      ctx.save();
+      ctx.translate(this.x, this.y);
+
+      if (this.shapeType === 0) {
+        const x = this.xShift * easeOutExpo(this.amount);
+        const y = this.yShift * easeOutExpo(this.amount);
+        const d = this.w * (1 - easeOutCubic(this.amount));
+
+        ctx.beginPath();
+        ctx.fillStyle = this.clr;
+        ctx.arc(x, y, Math.max(0, d / 2), 0, TAU);
+        ctx.fill();
+      }
+
+      else if (this.shapeType === 1) {
+        const x1 = this.xShift * easeOutExpo(this.amount);
+        const y1 = this.yShift * easeOutExpo(this.amount);
+        const x2 = this.xShift * easeOutCubic(this.amount);
+        const y2 = this.yShift * easeOutCubic(this.amount);
+        const sw = this.w * 0.1 * (1 - this.amount);
+
+        ctx.beginPath();
+        ctx.strokeStyle = this.clr;
+        ctx.lineWidth = Math.max(0.01, sw);
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+
+      else if (this.shapeType === 2) {
+        const x = this.xShift * easeOutExpo(this.amount);
+        const y = this.yShift * easeOutExpo(this.amount);
+
+        if (Math.random() < 0.5) {
+          const d = width * 0.005 * (1 - this.amount);
+
+          ctx.beginPath();
+          ctx.fillStyle = this.clr;
+          ctx.arc(x, y, Math.max(0, d / 2), 0, TAU);
+          ctx.fill();
+        }
+      }
+
+      else if (this.shapeType === 3) {
+        const a = this.revo * this.amount;
+        const r = this.w * (1 - easeOutCubic(this.amount));
+
+        const x =
+          this.xShift * easeOutCubic(this.amount) +
+          r * Math.cos(a);
+
+        const y =
+          this.yShift * easeOutCubic(this.amount) +
+          r * Math.sin(a);
+
+        const sw = this.w * 0.3 * (1 - this.amount);
+
+        ctx.beginPath();
+        ctx.fillStyle = this.clr;
+        ctx.arc(x, y, Math.max(0.01, sw / 2), 0, TAU);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+  }
+
+  class Raindrop extends Agent {
+    constructor(x, y, l, clr) {
+      super(x, y, l);
+
+      this.w = width * random(0.02, 0.01);
+      this.h = this.w * 2.5;
+      this.shftY = -height / 2;
+      this.clr = clr;
+      this.sw = width * 0.003;
+    }
+
+    show() {
+      ctx.save();
+      ctx.translate(this.x, this.y);
+
+      const cy =
+        this.shftY * (1 - Math.pow(this.amount, 3));
+
+      const rx = Math.max(0.001, (this.w * this.amount) / 2);
+      const ry = Math.max(0.001, (this.h * this.amount) / 2);
+
+      ctx.beginPath();
+      ctx.fillStyle = this.clr;
+      ctx.ellipse(0, cy, rx, ry, 0, 0, TAU);
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  class Donut extends Agent {
+    constructor(x, y, l, clr) {
+      super(x, y, l);
+
+      this.d = width * random(0.08, 0.05);
+      this.shftY = -height / 2;
+      this.clr = clr;
+      this.sw = this.d;
+    }
+
+    show() {
+      ctx.save();
+      ctx.translate(this.x, this.y);
+
+      const outerR =
+        (this.d / 2) * easeOutExpo(this.amount);
+
+      const innerR =
+        (this.d / 2) * easeInQuart(this.amount);
+
+      ctx.beginPath();
+
+      // Outer circle clockwise
+      ctx.arc(0, 0, Math.max(0.001, outerR), 0, TAU, false);
+
+      // Inner contour counterclockwise
+      ctx.arc(0, 0, Math.max(0.001, innerR), 0, TAU, true);
+
+      ctx.fillStyle = this.clr;
+      ctx.fill("evenodd");
+
+      ctx.restore();
+    }
+  }
+
+  class EffectGroup {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+      this.isDead = false;
+      this.agents = [];
+      this.clr = random(colors);
+
+      this.agents.push(
+        new Raindrop(
+          this.x,
+          this.y,
+          int(random(90, 120)),
+          this.clr
+        )
+      );
+
+      this.count = 0;
+    }
+
+    run() {
+      for (const o of this.agents) {
+        o.run();
+      }
+
+      for (let i = this.agents.length - 1; i >= 0; i--) {
+        if (this.agents[i].isDead) {
+          this.agents.splice(i, 1);
+        }
+      }
+
+      if (this.agents.length === 0 && this.count === 0) {
+        this.count++;
+      }
+
+      if (this.count === 1) {
+        this.agents.push(
+          new Donut(
+            this.x,
+            this.y,
+            int(random(50, 40)),
+            this.clr
+          )
+        );
+
+        for (let i = 0; i < 50; i++) {
+          this.agents.push(
+            new Splash(
+              this.x,
+              this.y,
+              int(random(90, 120)),
+              this.clr
+            )
+          );
+        }
+
+        this.count++;
+      }
+
+      else if (this.count === 2 && this.agents.length === 0) {
+        this.isDead = true;
+      }
+    }
+  }
+
+  function draw() {
+    frameCount++;
+
+    ctx.fillStyle = "rgb(230,230,230)";
+    ctx.fillRect(0, 0, width, height);
+
+    for (const effect of effects) {
+      effect.run();
+    }
+
+    for (let i = effects.length - 1; i >= 0; i--) {
+      if (effects[i].isDead) {
+        effects.splice(i, 1);
+      }
+    }
+
+    if (frameCount % 10 === 0) {
+      const x = random(width);
+      const y = random(0, 1) * height;
+      effects.push(new EffectGroup(x, y));
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  draw();
+})();
+</script>
+</body>
+</html>
