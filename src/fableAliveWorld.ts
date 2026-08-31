@@ -14,7 +14,7 @@ export interface WallTileDefinition {
   preload: WallTilePreload
 }
 
-export type LivingMotifKind = 'rain' | 'plant' | 'bird' | 'musical-note' | 'pattern' | 'thread-pulse' | 'letter-person' | 'custom'
+export type LivingMotifKind = 'rain' | 'plant' | 'bird' | 'musical-note' | 'pattern' | 'thread-pulse' | 'letter-person' | 'maze-runner' | 'custom'
 export type LivingMotifLayer = 'beneath-ink' | 'above-ink' | 'sound'
 
 export interface LivingMotifDefinition {
@@ -69,6 +69,14 @@ export const livingMotifs: readonly LivingMotifDefinition[] = [
     kind: 'bird',
     bounds: { x: 120, y: 4820, width: 1360, height: 1040 },
     activation: { startY: 4680, endY: 6040 },
+    layer: 'above-ink',
+    reducedMotion: 'hide',
+  },
+  {
+    id: 'maze-search',
+    kind: 'maze-runner',
+    bounds: { x: 250, y: 6935, width: 205, height: 190 },
+    activation: { startY: 6880, endY: 7160 },
     layer: 'above-ink',
     reducedMotion: 'hide',
   },

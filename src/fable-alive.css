@@ -64,6 +64,17 @@ body.fable-alive-page {
   pointer-events: none;
 }
 
+/* Replacement drawings that must remain in perfect registration with the
+   raster wall live in the document, not in the fixed viewport overlay. Native
+   scrolling therefore moves the clean plate and its animated ink together. */
+.fable-living-registered {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  display: block;
+  pointer-events: none;
+}
+
 .fable-motion-toggle {
   position: fixed;
   z-index: 4;

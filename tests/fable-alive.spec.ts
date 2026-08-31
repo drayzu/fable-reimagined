@@ -25,7 +25,7 @@ test('reconstructs the complete living Fable wall without seams or overflow', as
   await page.goto('/fable-alive')
   await expect(page.getByRole('heading', { name: 'Fable Alive — living study', exact: true })).toBeAttached()
   await expect(page.locator('.fable-wall-tile')).toHaveCount(18)
-  await expect(page.locator('.fable-living-overlay')).toHaveAttribute('data-motif-count', '4')
+  await expect(page.locator('.fable-living-overlay')).toHaveAttribute('data-motif-count', '5')
   const geometry = await page.locator('.fable-wall-tile').evaluateAll((tiles) => tiles.map((tile) => {
     const rect = tile.getBoundingClientRect()
     return { top: rect.top + scrollY, bottom: rect.bottom + scrollY }

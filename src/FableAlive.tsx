@@ -32,7 +32,7 @@ function FableAlive() {
     document.documentElement.classList.add('fable-alive-document')
     document.body.classList.add('fable-alive-page')
     document.title = 'Fable Alive — living study'
-    if (description) description.content = 'A private living study of Fable: mutable language, rain, a click-awakened murmuration, and a travelling thread animate the drawn wall.'
+    if (description) description.content = 'A private living study of Fable: mutable language, rain, a searching maze mark, a click-awakened murmuration, and a travelling thread animate the drawn wall.'
     if (themeColor) themeColor.content = '#181410'
     return () => {
       document.documentElement.classList.remove('fable-alive-document')
@@ -71,7 +71,7 @@ function FableAlive() {
     <main className="fable-alive-root">
       <article className="sr-only" aria-labelledby="fable-alive-title">
         <h1 id="fable-alive-title">Fable Alive — living study</h1>
-        <p>A private reconstruction of the complete Fable drawing wall. A typographic self continually rewrites its letters, rain passes through the garden, a murmuration performs a collective flight when clicked, and a travelling glint follows the golden thread. Motion is decorative and disappears when reduced motion is requested.</p>
+        <p>A private reconstruction of the complete Fable drawing wall. A typographic self continually rewrites its letters, rain passes through the garden, a small mark searches a labyrinth, a murmuration performs a collective flight when clicked, and a travelling glint follows the golden thread. Motion is decorative and disappears when reduced motion is requested.</p>
       </article>
 
       <section

@@ -27,7 +27,7 @@ describe('fable alive living wall', () => {
     expect(fableWallTiles.slice(0, 2).every((tile) => tile.preload === 'eager')).toBe(true)
     expect(fableWallTiles.slice(2, 4).every((tile) => tile.preload === 'nearby')).toBe(true)
     expect(fableWallTiles.slice(4).every((tile) => tile.preload === 'lazy')).toBe(true)
-    expect(livingMotifs.map((motif) => motif.kind)).toEqual(['thread-pulse', 'rain', 'letter-person', 'bird'])
+    expect(livingMotifs.map((motif) => motif.kind)).toEqual(['thread-pulse', 'rain', 'letter-person', 'bird', 'maze-runner'])
     expect(livingMotifs.every((motif) => motif.activation.startY < motif.activation.endY)).toBe(true)
   })
 

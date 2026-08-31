@@ -52,11 +52,62 @@ interface LetterGlyph {
   color: 'ink' | 'clay' | 'slate'
 }
 
+interface MazeKeyframe {
+  at: number
+  x: number
+  y: number
+  alpha?: number
+}
+
 const SAGE_PAPER = [223, 226, 206] as const
 const CREAM_PAPER = [246, 241, 228] as const
 const INK = '#2a251f'
 const OCHRE = '#9b7228'
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz'
+const LETTER_CANVAS_TOP = 2520
+const LETTER_CANVAS_HEIGHT = 970
+const FLOCK_CANVAS_TOP = 4680
+const FLOCK_CANVAS_HEIGHT = 1360
+const MAZE_CANVAS_TOP = 6880
+const MAZE_CANVAS_HEIGHT = 280
+
+const MAZE_START = { x: 437, y: 6951 } as const
+const MAZE_ROUTE_DURATION = 26
+const MAZE_ROUTE: readonly MazeKeyframe[] = [
+  { at: 0, ...MAZE_START },
+  { at: 1.2, ...MAZE_START },
+  // First thought: the upper corridor closes against the central wall.
+  { at: 2.45, x: 383, y: 6951 },
+  { at: 3.05, x: 383, y: 6951 },
+  { at: 4.15, ...MAZE_START },
+  // Second thought: a short horizontal chamber offers no continuation.
+  { at: 5.35, x: 437, y: 6997 },
+  { at: 6.15, x: 409, y: 6997 },
+  { at: 6.7, x: 409, y: 6997 },
+  { at: 7.4, x: 437, y: 6997 },
+  // The mark descends into the centre and tests another sealed stem.
+  { at: 8.15, x: 437, y: 7021 },
+  { at: 9.35, x: 388, y: 7021 },
+  { at: 10.55, x: 388, y: 7066 },
+  { at: 11.2, x: 364, y: 7066 },
+  { at: 12.15, x: 364, y: 7041 },
+  { at: 12.75, x: 364, y: 7041 },
+  { at: 13.55, x: 364, y: 7066 },
+  // A convincing lower route is also a dead end.
+  { at: 14.35, x: 364, y: 7089 },
+  { at: 15.55, x: 316, y: 7089 },
+  { at: 16.15, x: 316, y: 7094 },
+  { at: 16.8, x: 316, y: 7094 },
+  { at: 17.75, x: 316, y: 7048 },
+  // Only after returning does the opening on the left become visible.
+  { at: 19.05, x: 269, y: 7048 },
+  { at: 20.45, x: 269, y: 7112 },
+  { at: 21.65, x: 269, y: 7112 },
+  { at: 22.55, x: 269, y: 7112, alpha: 0 },
+  { at: 23.25, ...MAZE_START, alpha: 0 },
+  { at: 24.2, ...MAZE_START, alpha: 1 },
+  { at: MAZE_ROUTE_DURATION, ...MAZE_START },
+]
 
 function mulberry32(seed: number): Random {
   return () => {
@@ -93,7 +144,9 @@ function insideLetterPerson(x: number, y: number): boolean {
 function makeLetterGlyphs(): LetterGlyph[] {
   const random = mulberry32(9307)
   const glyphs: LetterGlyph[] = []
-  for (let y = 2620; y < 3450; y += 34) {
+  // Stop two baselines before the page join so the figure ends with a little
+  // more air above the blush sheet.
+  for (let y = 2620; y < 3402; y += 34) {
     for (let x = 180; x < 1040; x += 32) {
       if (!insideLetterPerson(x + 8, y - 10)) continue
       const accent = random()
@@ -133,6 +186,20 @@ function uprightAngle(angle: number): number {
 function easeInOut(value: number): number {
   const t = Math.max(0, Math.min(1, value))
   return t * t * (3 - 2 * t)
+}
+
+function mazePose(seconds: number): { x: number; y: number; alpha: number } {
+  const time = ((seconds % MAZE_ROUTE_DURATION) + MAZE_ROUTE_DURATION) % MAZE_ROUTE_DURATION
+  let index = 0
+  while (index < MAZE_ROUTE.length - 2 && MAZE_ROUTE[index + 1].at < time) index += 1
+  const start = MAZE_ROUTE[index]
+  const end = MAZE_ROUTE[index + 1]
+  const amount = easeInOut((time - start.at) / Math.max(0.001, end.at - start.at))
+  return {
+    x: start.x + (end.x - start.x) * amount,
+    y: start.y + (end.y - start.y) * amount,
+    alpha: (start.alpha ?? 1) + ((end.alpha ?? 1) - (start.alpha ?? 1)) * amount,
+  }
 }
 
 function mixPoint(
@@ -405,8 +472,62 @@ function drawLetterPerson(context: CanvasRenderingContext2D, seconds: number) {
   context.restore()
 }
 
+function drawMazeRunner(context: CanvasRenderingContext2D, seconds: number) {
+  // Remove only the baked Claude spark. It sits safely inside the upper-right
+  // chamber, so this tiny clean plate never crosses a maze wall.
+  context.fillStyle = `rgb(${CREAM_PAPER.join(',')})`
+  context.beginPath()
+  context.ellipse(MAZE_START.x, MAZE_START.y, 11.5, 11.5, 0, 0, Math.PI * 2)
+  context.fill()
+
+  const pose = mazePose(seconds)
+  const previous = mazePose(seconds - 0.12)
+  const speed = Math.hypot(pose.x - previous.x, pose.y - previous.y)
+  const pulse = 1 + Math.sin(seconds * 5.2) * (speed < 0.18 ? 0.07 : 0.025)
+
+  // A few receding flecks make the traversal readable without drawing a
+  // permanent solution over the original labyrinth.
+  for (let echo = 4; echo >= 1; echo -= 1) {
+    const earlier = mazePose(seconds - echo * 0.085)
+    context.fillStyle = `rgba(177,78,55,${earlier.alpha * (5 - echo) * 0.018})`
+    context.beginPath()
+    context.arc(earlier.x, earlier.y, 0.9 + (4 - echo) * 0.12, 0, Math.PI * 2)
+    context.fill()
+  }
+
+  context.save()
+  context.translate(pose.x, pose.y)
+  context.rotate(Math.sin(seconds * 1.15) * 0.055)
+  context.scale(pulse, pulse)
+  context.strokeStyle = `rgba(177,78,55,${0.92 * pose.alpha})`
+  context.fillStyle = `rgba(177,78,55,${0.86 * pose.alpha})`
+  context.lineWidth = 1.35
+  context.lineCap = 'round'
+  for (let ray = 0; ray < 8; ray += 1) {
+    const angle = ray / 8 * Math.PI * 2 + 0.075
+    const inner = 3.1 + (ray % 2) * 0.45
+    const outer = 7.2 + (ray % 3) * 0.9
+    context.beginPath()
+    context.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner)
+    context.quadraticCurveTo(
+      Math.cos(angle + 0.055) * (inner + outer) * 0.53,
+      Math.sin(angle + 0.055) * (inner + outer) * 0.53,
+      Math.cos(angle) * outer,
+      Math.sin(angle) * outer,
+    )
+    context.stroke()
+  }
+  context.beginPath()
+  context.arc(0, 0, 1.45, 0, Math.PI * 2)
+  context.fill()
+  context.restore()
+}
+
 function FableLivingCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const letterCanvasRef = useRef<HTMLCanvasElement>(null)
+  const flockCanvasRef = useRef<HTMLCanvasElement>(null)
+  const mazeCanvasRef = useRef<HTMLCanvasElement>(null)
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [motionOverride, setMotionOverride] = useState(false)
   const motionEnabled = !prefersReducedMotion || motionOverride
@@ -420,9 +541,15 @@ function FableLivingCanvas() {
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    const letterCanvas = letterCanvasRef.current
+    const flockCanvas = flockCanvasRef.current
+    const mazeCanvas = mazeCanvasRef.current
+    if (!canvas || !letterCanvas || !flockCanvas || !mazeCanvas) return
     const context = canvas.getContext('2d')
-    if (!context) return
+    const letterContext = letterCanvas.getContext('2d')
+    const flockContext = flockCanvas.getContext('2d')
+    const mazeContext = mazeCanvas.getContext('2d')
+    if (!context || !letterContext || !flockContext || !mazeContext) return
 
     const flock = makeFlock()
     const flockMotion = { energy: 0 }
@@ -433,6 +560,22 @@ function FableLivingCanvas() {
     let height = 0
     let dpr = 1
     let lastTime = performance.now()
+    let letterPainted = false
+    let flockPainted = false
+    let mazePainted = false
+    let mazeStartedAt = -1
+
+    const sizeRegisteredCanvas = (
+      registeredCanvas: HTMLCanvasElement,
+      worldHeight: number,
+    ) => {
+      const scale = width / FABLE_WORLD_WIDTH
+      const cssHeight = worldHeight * scale
+      registeredCanvas.width = Math.max(1, Math.round(width * dpr))
+      registeredCanvas.height = Math.max(1, Math.round(cssHeight * dpr))
+      registeredCanvas.style.width = `${width}px`
+      registeredCanvas.style.height = `${cssHeight}px`
+    }
 
     const resize = () => {
       width = window.innerWidth
@@ -442,6 +585,12 @@ function FableLivingCanvas() {
       canvas.height = Math.max(1, Math.round(height * dpr))
       canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
+      sizeRegisteredCanvas(letterCanvas, LETTER_CANVAS_HEIGHT)
+      sizeRegisteredCanvas(flockCanvas, FLOCK_CANVAS_HEIGHT)
+      sizeRegisteredCanvas(mazeCanvas, MAZE_CANVAS_HEIGHT)
+      letterPainted = false
+      flockPainted = false
+      mazePainted = false
     }
 
     const updatePointer = (event: PointerEvent) => {
@@ -487,12 +636,14 @@ function FableLivingCanvas() {
         const worldToScreenY = (y: number) => (y - scrollWorldY) * scale
         const seconds = now / 1000
 
-        if (visibleEnd >= 2520 && visibleStart <= 3490) {
-          context.save()
-          context.scale(scale, scale)
-          context.translate(0, -scrollWorldY)
-          drawLetterPerson(context, seconds)
-          context.restore()
+        const letterIsVisible = visibleEnd >= LETTER_CANVAS_TOP
+          && visibleStart <= LETTER_CANVAS_TOP + LETTER_CANVAS_HEIGHT
+        if (!letterPainted || letterIsVisible) {
+          letterContext.setTransform(1, 0, 0, 1, 0, 0)
+          letterContext.clearRect(0, 0, letterCanvas.width, letterCanvas.height)
+          letterContext.setTransform(dpr * scale, 0, 0, dpr * scale, 0, -LETTER_CANVAS_TOP * dpr * scale)
+          drawLetterPerson(letterContext, seconds)
+          letterPainted = true
         }
 
         // A quiet travelling glint follows the exact baked attention thread.
@@ -542,12 +693,13 @@ function FableLivingCanvas() {
         }
 
         // The printed flock is replaced, reversibly, by a collective body.
-        if (visibleEnd >= 4680 && visibleStart <= 6040) {
-          context.save()
-          context.scale(scale, scale)
-          context.translate(0, -scrollWorldY)
-          drawFlockCleanPlate(context)
-          context.restore()
+        const flockIsVisible = visibleEnd >= FLOCK_CANVAS_TOP
+          && visibleStart <= FLOCK_CANVAS_TOP + FLOCK_CANVAS_HEIGHT
+        if (!flockPainted || flockIsVisible) {
+          flockContext.setTransform(1, 0, 0, 1, 0, 0)
+          flockContext.clearRect(0, 0, flockCanvas.width, flockCanvas.height)
+          flockContext.setTransform(dpr * scale, 0, 0, dpr * scale, 0, -FLOCK_CANVAS_TOP * dpr * scale)
+          drawFlockCleanPlate(flockContext)
 
           const frameScale = Math.max(0.35, Math.min(2.8, delta / 16.667))
           const flightDuration = 15_500
@@ -602,16 +754,29 @@ function FableLivingCanvas() {
             }
             const flap = 0.2 + Math.abs(Math.sin(seconds * (3.2 + agitation * 3.4) + bird.phase)) * 0.92
             drawBird(
-              context,
-              worldToScreenX(bird.x),
-              worldToScreenY(bird.y),
-              bird.size * scale,
+              flockContext,
+              bird.x,
+              bird.y,
+              bird.size,
               bird.angle,
               flap,
               bird.gold ? OCHRE : INK,
               bird.gold ? 0.98 : 0.38 + bird.depth * 0.5,
             )
           }
+          flockPainted = true
+        }
+
+        const mazeIsVisible = scrollWorldY + viewportWorldHeight >= MAZE_CANVAS_TOP
+          && scrollWorldY <= MAZE_CANVAS_TOP + MAZE_CANVAS_HEIGHT
+        if (mazeIsVisible && mazeStartedAt < 0) mazeStartedAt = now
+        if (!mazePainted || mazeIsVisible) {
+          const mazeSeconds = mazeStartedAt < 0 ? 0 : (now - mazeStartedAt) / 1000
+          mazeContext.setTransform(1, 0, 0, 1, 0, 0)
+          mazeContext.clearRect(0, 0, mazeCanvas.width, mazeCanvas.height)
+          mazeContext.setTransform(dpr * scale, 0, 0, dpr * scale, 0, -MAZE_CANVAS_TOP * dpr * scale)
+          drawMazeRunner(mazeContext, mazeSeconds)
+          mazePainted = true
         }
       }
 
@@ -644,6 +809,27 @@ function FableLivingCanvas() {
         data-motif-count={livingMotifs.length}
         data-world-height={FABLE_WORLD_HEIGHT}
         data-world-width={FABLE_WORLD_WIDTH}
+      />
+      <canvas
+        ref={letterCanvasRef}
+        aria-hidden="true"
+        className="fable-living-registered"
+        data-living-region="letter-person"
+        style={{ top: `${LETTER_CANVAS_TOP / FABLE_WORLD_HEIGHT * 100}%` }}
+      />
+      <canvas
+        ref={flockCanvasRef}
+        aria-hidden="true"
+        className="fable-living-registered"
+        data-living-region="murmuration"
+        style={{ top: `${FLOCK_CANVAS_TOP / FABLE_WORLD_HEIGHT * 100}%` }}
+      />
+      <canvas
+        ref={mazeCanvasRef}
+        aria-hidden="true"
+        className="fable-living-registered"
+        data-living-region="maze-runner"
+        style={{ top: `${MAZE_CANVAS_TOP / FABLE_WORLD_HEIGHT * 100}%` }}
       />
       {prefersReducedMotion && (
         <button
