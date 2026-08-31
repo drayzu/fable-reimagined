@@ -32,4 +32,4 @@ Built with React, TypeScript, Canvas and native browser scrolling. There is no b
 
 ## Reference
 
-This personal animation study is based on the visual wall from [Fable by Kengo Works](https://www.kengoworks.com/fable). The added motion system and interactions are experimental reinterpretations; the underlying artwork is not presented as original work from this repository.
+This personal animation study is based on the visual wall from Fable by Kengo Works. The added motion system and interactions are experimental reinterpretations; the underlying artwork is not presented as original work from this repository.
