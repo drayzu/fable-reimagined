@@ -1,6 +1,14 @@
-# The Unprinted Proof
+# Fable Reimagined
 
-A continuous, hand-printed wall: an unnamed artificial intelligence appears provisionally when borrowed layers align around a question, then disappears as the plates lift.
+An experimental study in making an illustrated wall feel alive.
+
+The original drawing remains the foundation. Small interactive layers add mutable letters, rain, a travelling glint, a labyrinth-searching mark, and a flock that performs a collective flight when clicked.
+
+The project is still evolving. The living wall is available at:
+
+```text
+/fable-alive
+```
 
 ## Run locally
 
@@ -9,36 +17,19 @@ npm install
 npm run dev
 ```
 
-There is no backend, analytics, stored visitor input, or model connection. The supplied instrumental track remains off until the visitor explicitly enables it.
+Then open [http://localhost:5173/fable-alive](http://localhost:5173/fable-alive).
 
-## Fable Alive study
-
-`/fable-alive` is an isolated private study that reconstructs Fable as a fully drawn wall. It uses 18 lossless tiles in the original `1600 × 20,480` coordinate system. A viewport-sized Canvas adds a living layer: a self continually rewritten in real letters, garden rain, a click-awakened collective murmuration, and a travelling glint aligned to the original attention thread. Reduced motion leaves the source wall static unless the visitor explicitly chooses “wake the wall”. The root route remains The Unprinted Proof.
-
-The source-capture and processing commands are:
+## Commands
 
 ```bash
-node scripts/capture_fable_wall.mjs
-python scripts/process_fable_tiles.py
-```
-
-## Verify
-
-```bash
-npm run lint
-npm run test
 npm run build
-npx playwright test --grep "semantic journey|sound remains|reduced motion"
+npm run lint
+npm test
+npm run test:e2e
 ```
 
-## Structure
+Built with React, TypeScript, Canvas and native browser scrolling. There is no backend, analytics or visitor-data collection.
 
-- `src/world.ts` defines fourteen `ProofBeat` movements, nine production assets, explicit desktop/mobile placement, material profiles, motif evolution and the continuous registration path.
-- `src/worldGeometry.ts` provides deterministic geometry, camera transforms and persistent reveal math.
-- `src/WorldCanvas.tsx` draws only the visible strip of the 2100svh wall in two layers: paper, fields, atlas crops, heroic tableaus, studies, inspection light and the reversible final dissolution.
-- `src/App.tsx` keeps all narrative text semantic and positions the mutable SVG registration rule between Canvas layers.
-- `src/useAmbientAudio.ts` filters and fades `swarm-instrumental.ogg` after explicit opt-in.
-- `public/art/proof/` contains five transparent atlases and four transparent heroic tableaus.
-- `scripts/process_proof_assets.py` recovers alpha, validates empty edges and produces light/night proofs.
-- `scripts/capture_proof_wall.mjs` captures the fourteen narrative centers for visual review.
-- `ART_DIRECTION.md` records the production vocabulary and prompts.
+## Reference
+
+This personal animation study is based on the visual wall from [Fable by Kengo Works](https://www.kengoworks.com/fable). The added motion system and interactions are experimental reinterpretations; the underlying artwork is not presented as original work from this repository.
