@@ -529,8 +529,7 @@ function FableLivingCanvas() {
   const flockCanvasRef = useRef<HTMLCanvasElement>(null)
   const mazeCanvasRef = useRef<HTMLCanvasElement>(null)
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-  const [motionOverride, setMotionOverride] = useState(false)
-  const motionEnabled = !prefersReducedMotion || motionOverride
+  const motionEnabled = !prefersReducedMotion
 
   useEffect(() => {
     const query = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -807,6 +806,7 @@ function FableLivingCanvas() {
         aria-hidden="true"
         className="fable-living-overlay"
         data-motif-count={livingMotifs.length}
+        data-motion={motionEnabled ? 'on' : 'off'}
         data-world-height={FABLE_WORLD_HEIGHT}
         data-world-width={FABLE_WORLD_WIDTH}
       />
@@ -831,15 +831,6 @@ function FableLivingCanvas() {
         data-living-region="maze-runner"
         style={{ top: `${MAZE_CANVAS_TOP / FABLE_WORLD_HEIGHT * 100}%` }}
       />
-      {prefersReducedMotion && (
-        <button
-          className="fable-motion-toggle"
-          onClick={() => setMotionOverride((current) => !current)}
-          type="button"
-        >
-          {motionEnabled ? 'let the wall rest' : 'wake the wall'}
-        </button>
-      )}
     </>
   )
 }

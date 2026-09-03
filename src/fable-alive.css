@@ -75,27 +75,6 @@ body.fable-alive-page {
   pointer-events: none;
 }
 
-.fable-motion-toggle {
-  position: fixed;
-  z-index: 4;
-  right: 18px;
-  bottom: 18px;
-  padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
-  border-radius: 999px;
-  color: #5d5549;
-  background: rgb(246 241 228 / 82%);
-  font: 500 12px/1.2 'Shantell Sans', cursive;
-  letter-spacing: 0.02em;
-  backdrop-filter: blur(8px);
-  cursor: pointer;
-}
-
-.fable-motion-toggle:focus-visible {
-  outline: 2px solid #9b7228;
-  outline-offset: 3px;
-}
-
 @media (forced-colors: active) {
   .fable-wall { forced-color-adjust: none; }
 }
