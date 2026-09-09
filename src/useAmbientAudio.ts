@@ -38,22 +38,6 @@ export function useAmbientAudio() {
     if (audio) audio.pause()
   }, [ensureAudio, supported])
 
-  useEffect(() => {
-    const onVisibility = () => {
-      const audio = audioRef.current
-      if (!audio) return
-      if (document.hidden) audio.pause()
-      else if (enabledRef.current) {
-        void audio.play().catch(() => {
-          enabledRef.current = false
-          setEnabled(false)
-        })
-      }
-    }
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => document.removeEventListener('visibilitychange', onVisibility)
-  }, [])
-
   useEffect(() => () => {
     const audio = audioRef.current
     if (!audio) return
