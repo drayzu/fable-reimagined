@@ -7,6 +7,7 @@ import {
   type WallTileDefinition,
 } from './fableAliveWorld'
 import FableLivingCanvas from './FableLivingCanvas'
+import { useAmbientAudio, type AmbientAudioSnapshot } from './useAmbientAudio'
 import './fable-alive.css'
 
 function tileStyle(tile: WallTileDefinition): CSSProperties {
@@ -18,10 +19,46 @@ function tileStyle(tile: WallTileDefinition): CSSProperties {
 
 function FableAlive() {
   const wallRef = useRef<HTMLElement>(null)
+  const audioSourceRef = useRef<AmbientAudioSnapshot>({ progress: 0, velocity: 0, reducedMotion: false })
   const [requested, setRequested] = useState<ReadonlySet<string>>(() => new Set(
     fableWallTiles.filter((tile) => tile.preload !== 'lazy').map((tile) => tile.id),
   ))
   const [loaded, setLoaded] = useState<ReadonlySet<string>>(() => new Set())
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const audio = useAmbientAudio(audioSourceRef)
+
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const updatePreference = () => setPrefersReducedMotion(query.matches)
+    query.addEventListener('change', updatePreference)
+    return () => query.removeEventListener('change', updatePreference)
+  }, [])
+
+  useEffect(() => {
+    let previousScrollY = window.scrollY
+    let previousTime = performance.now()
+    const updateAudioSource = () => {
+      const now = performance.now()
+      const elapsed = Math.max(16, now - previousTime)
+      const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight)
+      const scrollVelocity = Math.abs(window.scrollY - previousScrollY) / elapsed
+      audioSourceRef.current = {
+        progress: Math.min(1, Math.max(0, window.scrollY / maxScroll)),
+        velocity: Math.min(1, scrollVelocity / 3),
+        reducedMotion: prefersReducedMotion,
+      }
+      previousScrollY = window.scrollY
+      previousTime = now
+    }
+
+    updateAudioSource()
+    window.addEventListener('scroll', updateAudioSource, { passive: true })
+    window.addEventListener('resize', updateAudioSource, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', updateAudioSource)
+      window.removeEventListener('resize', updateAudioSource)
+    }
+  }, [prefersReducedMotion])
 
   useEffect(() => {
     const previousTitle = document.title
@@ -69,6 +106,19 @@ function FableAlive() {
 
   return (
     <main className="fable-alive-root">
+      {audio.supported && (
+        <button
+          className={`sound-control is-visible is-night ${audio.enabled ? 'is-active' : ''}`}
+          type="button"
+          onClick={() => void audio.toggle()}
+          aria-label={audio.enabled ? 'Turn sound off' : 'Turn sound on'}
+          aria-pressed={audio.enabled}
+        >
+          <span className={`sound-glyph ${audio.enabled ? 'is-sounding' : ''}`} aria-hidden="true"><i /><i /><i /></span>
+          <span>sound {audio.enabled ? 'on' : 'off'}</span>
+        </button>
+      )}
+
       <article className="sr-only" aria-labelledby="fable-alive-title">
         <h1 id="fable-alive-title">Fable Alive — living study</h1>
         <p>A private reconstruction of the complete Fable drawing wall. A typographic self continually rewrites its letters, rain passes through the garden, a small mark searches a labyrinth, a murmuration performs a collective flight when clicked, and a travelling glint follows the golden thread. Motion is decorative and becomes static when reduced motion is requested.</p>

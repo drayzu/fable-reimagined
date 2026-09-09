@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
-import { clamp01, interpolateProofProfiles, type WorldFrame } from './world'
+import { clamp01, interpolateProofProfiles } from './world'
 
 export interface AmbientAudioSnapshot {
   progress: number
@@ -46,7 +46,7 @@ const TRACK_SOURCE = `${import.meta.env.BASE_URL}audio/swarm-instrumental.ogg`
 const TRACK_VOLUME = .36
 const FADE_DURATION = 1100
 
-export function useAmbientAudio(source: MutableRefObject<WorldFrame>) {
+export function useAmbientAudio(source: MutableRefObject<AmbientAudioSnapshot>) {
   const [enabled, setEnabled] = useState(false)
   const [supported] = useState(() => typeof Audio !== 'undefined')
   const audioRef = useRef<HTMLAudioElement | null>(null)
