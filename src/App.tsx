@@ -38,7 +38,7 @@ function RegistrationRule({ layer }: { layer: 'under' | 'over' }) {
 function App() {
   const frameRef = useRef<WorldFrame>(initialFrame())
   const [ui, setUi] = useState<UiFrame>({ soundVisible: false, night: false, movementIndex: 0 })
-  const audio = useAmbientAudio(frameRef)
+  const audio = useAmbientAudio()
   const updateUi = useCallback((frame: WorldFrame) => {
     const next = { soundVisible: frame.progress <= .045, night: frame.profile.visual.night > .5, movementIndex: frame.movementIndex }
     setUi((current) => current.soundVisible === next.soundVisible && current.night === next.night && current.movementIndex === next.movementIndex ? current : next)

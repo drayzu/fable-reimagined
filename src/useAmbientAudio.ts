@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { clamp01, interpolateProofProfiles } from './world'
 
 export interface AmbientAudioSnapshot {
@@ -43,20 +43,14 @@ export function deriveAmbientAudioProfile(snapshot: AmbientAudioSnapshot): Ambie
 }
 
 const TRACK_SOURCE = `${import.meta.env.BASE_URL}audio/swarm-instrumental.ogg`
-const TRACK_VOLUME = .36
 const FADE_DURATION = 1100
 
-export function useAmbientAudio(source: MutableRefObject<AmbientAudioSnapshot>) {
+export function useAmbientAudio() {
   const [enabled, setEnabled] = useState(false)
   const [supported] = useState(() => typeof Audio !== 'undefined')
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const contextRef = useRef<AudioContext | null>(null)
-  const filterRef = useRef<BiquadFilterNode | null>(null)
-  const sceneGainRef = useRef<GainNode | null>(null)
-  const gateGainRef = useRef<GainNode | null>(null)
   const fadeRef = useRef<number | null>(null)
   const enabledRef = useRef(false)
-  void source
 
   const ensureAudio = useCallback(() => {
     if (audioRef.current) return audioRef.current
@@ -68,29 +62,15 @@ export function useAmbientAudio(source: MutableRefObject<AmbientAudioSnapshot>) 
     return audio
   }, [])
 
-  const ensureGraph = useCallback((audio: HTMLAudioElement) => {
-    if (contextRef.current && gateGainRef.current) return contextRef.current
-    const AudioContextClass = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!AudioContextClass) return null
-    const context = new AudioContextClass(); const media = context.createMediaElementSource(audio)
-    const filter = context.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 900; filter.Q.value = .6
-    const sceneGain = context.createGain(); sceneGain.gain.value = TRACK_VOLUME
-    const gateGain = context.createGain(); gateGain.gain.value = 0
-    media.connect(filter).connect(sceneGain).connect(gateGain).connect(context.destination)
-    contextRef.current = context; filterRef.current = filter; sceneGainRef.current = sceneGain; gateGainRef.current = gateGain
-    return context
-  }, [])
-
   const fadeTo = useCallback((target: number, onComplete?: () => void) => {
     if (fadeRef.current !== null) window.cancelAnimationFrame(fadeRef.current)
-    const gate = gateGainRef.current; const audio = audioRef.current; const initial = gate?.gain.value ?? audio?.volume ?? 0
+    const audio = audioRef.current; const initial = audio?.volume ?? 0
     const started = performance.now()
     const frame = (now: number) => {
       const progress = clamp01((now - started) / FADE_DURATION)
       const eased = 1 - Math.pow(1 - progress, 3)
       const value = initial + (target - initial) * eased
-      if (gate) gate.gain.value = value
-      else if (audio) audio.volume = value
+      if (audio) audio.volume = value
       if (progress < 1) fadeRef.current = window.requestAnimationFrame(frame)
       else { fadeRef.current = null; onComplete?.() }
     }
@@ -102,9 +82,7 @@ export function useAmbientAudio(source: MutableRefObject<AmbientAudioSnapshot>) 
     if (!enabled) {
       const audio = ensureAudio()
       try {
-        const context = ensureGraph(audio)
-        if (!context) audio.volume = 0
-        if (context?.state === 'suspended') await context.resume()
+        audio.volume = 0
         await audio.play()
         enabledRef.current = true
         setEnabled(true)
@@ -119,33 +97,15 @@ export function useAmbientAudio(source: MutableRefObject<AmbientAudioSnapshot>) 
     setEnabled(false)
     const audio = audioRef.current
     if (audio) fadeTo(0, () => audio.pause())
-  }, [enabled, ensureAudio, ensureGraph, fadeTo, supported])
-
-  useEffect(() => {
-    let animationFrame = 0
-    const update = () => {
-      const context = contextRef.current; const filter = filterRef.current; const sceneGain = sceneGainRef.current
-      if (context && filter && sceneGain && enabledRef.current) {
-        const profile = deriveAmbientAudioProfile(source.current)
-        filter.frequency.setTargetAtTime(profile.toneCutoffHz, context.currentTime, .18)
-        filter.Q.setTargetAtTime(Math.min(4, profile.noiseQ), context.currentTime, .2)
-        sceneGain.gain.setTargetAtTime(TRACK_VOLUME * clamp01(profile.masterGain * 23), context.currentTime, .12)
-      }
-      animationFrame = window.requestAnimationFrame(update)
-    }
-    animationFrame = window.requestAnimationFrame(update)
-    return () => window.cancelAnimationFrame(animationFrame)
-  }, [source])
+  }, [enabled, ensureAudio, fadeTo, supported])
 
   useEffect(() => {
     const onVisibility = () => {
       const audio = audioRef.current
       if (!audio) return
-      if (document.hidden) { audio.pause(); void contextRef.current?.suspend() }
+      if (document.hidden) audio.pause()
       else if (enabledRef.current) {
-        void contextRef.current?.resume()
-        if (gateGainRef.current) gateGainRef.current.gain.value = 0
-        else audio.volume = 0
+        audio.volume = 0
         void audio.play().then(() => fadeTo(1)).catch(() => undefined)
       }
     }
@@ -161,8 +121,6 @@ export function useAmbientAudio(source: MutableRefObject<AmbientAudioSnapshot>) 
     audio.removeAttribute('src')
     audio.load()
     audioRef.current = null
-    void contextRef.current?.close()
-    contextRef.current = null; filterRef.current = null; sceneGainRef.current = null; gateGainRef.current = null
   }, [])
 
   return { enabled, supported, toggle }

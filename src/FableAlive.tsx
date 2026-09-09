@@ -7,7 +7,7 @@ import {
   type WallTileDefinition,
 } from './fableAliveWorld'
 import FableLivingCanvas from './FableLivingCanvas'
-import { useAmbientAudio, type AmbientAudioSnapshot } from './useAmbientAudio'
+import { useAmbientAudio } from './useAmbientAudio'
 import './fable-alive.css'
 
 function tileStyle(tile: WallTileDefinition): CSSProperties {
@@ -19,21 +19,12 @@ function tileStyle(tile: WallTileDefinition): CSSProperties {
 
 function FableAlive() {
   const wallRef = useRef<HTMLElement>(null)
-  const audioSourceRef = useRef<AmbientAudioSnapshot>({ progress: 0, velocity: 0, reducedMotion: false })
   const [requested, setRequested] = useState<ReadonlySet<string>>(() => new Set(
     fableWallTiles.filter((tile) => tile.preload !== 'lazy').map((tile) => tile.id),
   ))
   const [loaded, setLoaded] = useState<ReadonlySet<string>>(() => new Set())
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [showSoundControl, setShowSoundControl] = useState(() => window.scrollY <= 48)
-  const audio = useAmbientAudio(audioSourceRef)
-
-  useEffect(() => {
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const updatePreference = () => setPrefersReducedMotion(query.matches)
-    query.addEventListener('change', updatePreference)
-    return () => query.removeEventListener('change', updatePreference)
-  }, [])
+  const audio = useAmbientAudio()
 
   useEffect(() => {
     const updateSoundControl = () => setShowSoundControl(window.scrollY <= 48)
@@ -41,32 +32,6 @@ function FableAlive() {
     window.addEventListener('scroll', updateSoundControl, { passive: true })
     return () => window.removeEventListener('scroll', updateSoundControl)
   }, [])
-
-  useEffect(() => {
-    let previousScrollY = window.scrollY
-    let previousTime = performance.now()
-    const updateAudioSource = () => {
-      const now = performance.now()
-      const elapsed = Math.max(16, now - previousTime)
-      const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight)
-      const scrollVelocity = Math.abs(window.scrollY - previousScrollY) / elapsed
-      audioSourceRef.current = {
-        progress: Math.min(1, Math.max(0, window.scrollY / maxScroll)),
-        velocity: Math.min(1, scrollVelocity / 3),
-        reducedMotion: prefersReducedMotion,
-      }
-      previousScrollY = window.scrollY
-      previousTime = now
-    }
-
-    updateAudioSource()
-    window.addEventListener('scroll', updateAudioSource, { passive: true })
-    window.addEventListener('resize', updateAudioSource, { passive: true })
-    return () => {
-      window.removeEventListener('scroll', updateAudioSource)
-      window.removeEventListener('resize', updateAudioSource)
-    }
-  }, [prefersReducedMotion])
 
   useEffect(() => {
     const previousTitle = document.title
