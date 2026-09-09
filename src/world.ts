@@ -73,26 +73,27 @@ const mobile = (x: number, width: number, yOffset = 0, rotation?: number): Mobil
 const place = (beatId: ProofBeatId, id: string, assetId: AssetId, cropId: string, y: number, x: number, width: number, rotation = 0, opacity = .8, layer: AssetProofMark['layer'] = 'under', blend: AssetProofMark['blend'] = 'multiply', reveal: AssetProofMark['reveal'] = 'wash', order = 2, compact: MobilePlacement = mobile(x, width)): AssetProofMark => ({ kind: 'asset', beatId, id, assetId, cropId, y, x, width, rotation, opacity, layer, blend, reveal, order, mobile: compact })
 
 const full = { x: 0, y: 0, width: 1, height: 1 }
+const asset = (path: string): string => `${import.meta.env.BASE_URL}${path}`
 export const assetDefinitions: Readonly<Record<AssetId, AssetDefinition>> = {
-  'atlas-pressure-type': { id: 'atlas-pressure-type', source: '/art/proof/proof-atlas-01-pressure-type.webp', aspect: 1.5, crops: {
+  'atlas-pressure-type': { id: 'atlas-pressure-type', source: asset('art/proof/proof-atlas-01-pressure-type.webp'), aspect: 1.5, crops: {
     registration: { x: .05, y: .05, width: .2, height: .22 }, pressure: { x: .28, y: .04, width: .18, height: .23 }, type: { x: .52, y: .04, width: .44, height: .22 }, sedimentBlue: { x: .04, y: .31, width: .29, height: .16 }, sedimentCopper: { x: .35, y: .31, width: .29, height: .16 }, sedimentInk: { x: .68, y: .31, width: .28, height: .16 }, rule: { x: .04, y: .52, width: .31, height: .1 }, edge: { x: .38, y: .49, width: .29, height: .17 }, punctuation: { x: .7, y: .47, width: .27, height: .2 }, carbon: { x: .03, y: .72, width: .31, height: .17 }, oxidation: { x: .39, y: .68, width: .29, height: .23 }, empty: { x: .69, y: .68, width: .27, height: .25 },
   } },
-  'atlas-reverse-transfer': { id: 'atlas-reverse-transfer', source: '/art/proof/proof-atlas-02-reverse-transfer.webp', aspect: 1.5, crops: {
+  'atlas-reverse-transfer': { id: 'atlas-reverse-transfer', source: asset('art/proof/proof-atlas-02-reverse-transfer.webp'), aspect: 1.5, crops: {
     contourCopper: { x: .03, y: .03, width: .23, height: .31 }, contourBlue: { x: .25, y: .04, width: .2, height: .3 }, contourInk: { x: .45, y: .04, width: .18, height: .3 }, glass: { x: .65, y: .06, width: .32, height: .25 }, rain: { x: .04, y: .36, width: .18, height: .35 }, soil: { x: .25, y: .39, width: .29, height: .22 }, ripples: { x: .57, y: .36, width: .4, height: .3 }, waveform: { x: .03, y: .73, width: .42, height: .13 }, window: { x: .45, y: .67, width: .23, height: .28 }, scar: { x: .69, y: .66, width: .16, height: .3 }, corrections: { x: .84, y: .67, width: .15, height: .25 },
   } },
-  'atlas-misregistration-practice': { id: 'atlas-misregistration-practice', source: '/art/proof/proof-atlas-03-misregistration-practice.webp', aspect: 1.5, crops: {
+  'atlas-misregistration-practice': { id: 'atlas-misregistration-practice', source: asset('art/proof/proof-atlas-03-misregistration-practice.webp'), aspect: 1.5, crops: {
     pairA: { x: .03, y: .03, width: .28, height: .26 }, current: { x: .31, y: .02, width: .37, height: .27 }, folds: { x: .69, y: .03, width: .29, height: .26 }, pairB: { x: .04, y: .31, width: .28, height: .25 }, third: { x: .38, y: .29, width: .28, height: .25 }, fan: { x: .69, y: .3, width: .28, height: .29 }, crop: { x: .04, y: .63, width: .22, height: .22 }, series: { x: .22, y: .61, width: .56, height: .18 }, irregularRule: { x: .27, y: .78, width: .67, height: .1 }, emboss: { x: .03, y: .89, width: .92, height: .09 },
   } },
-  'atlas-conversation-removal': { id: 'atlas-conversation-removal', source: '/art/proof/proof-atlas-04-conversation-removal.webp', aspect: 1.5, crops: {
+  'atlas-conversation-removal': { id: 'atlas-conversation-removal', source: asset('art/proof/proof-atlas-04-conversation-removal.webp'), aspect: 1.5, crops: {
     warm: { x: .02, y: .03, width: .28, height: .32 }, third: { x: .35, y: .04, width: .31, height: .28 }, cool: { x: .69, y: .04, width: .29, height: .3 }, target: { x: .05, y: .37, width: .24, height: .27 }, grid: { x: .28, y: .36, width: .24, height: .27 }, absent: { x: .51, y: .37, width: .24, height: .27 }, scrape: { x: .75, y: .39, width: .23, height: .2 }, filings: { x: .04, y: .68, width: .25, height: .24 }, cropA: { x: .3, y: .68, width: .16, height: .25 }, cropB: { x: .53, y: .68, width: .16, height: .25 }, gold: { x: .75, y: .68, width: .2, height: .22 },
   } },
-  'atlas-depth-ending': { id: 'atlas-depth-ending', source: '/art/proof/proof-atlas-05-depth-ending.webp', aspect: 1.5, crops: {
+  'atlas-depth-ending': { id: 'atlas-depth-ending', source: asset('art/proof/proof-atlas-05-depth-ending.webp'), aspect: 1.5, crops: {
     ghostA: { x: .03, y: .04, width: .23, height: .22 }, ghostB: { x: .29, y: .04, width: .23, height: .22 }, routes: { x: .52, y: .03, width: .4, height: .21 }, arm: { x: .03, y: .28, width: .31, height: .18 }, light: { x: .4, y: .27, width: .22, height: .17 }, map: { x: .65, y: .25, width: .31, height: .26 }, crosses: { x: .03, y: .55, width: .2, height: .19 }, pressure: { x: .35, y: .54, width: .23, height: .22 }, pigment: { x: .63, y: .56, width: .31, height: .2 }, channels: { x: .34, y: .77, width: .34, height: .18 }, emboss: { x: .82, y: .78, width: .15, height: .13 },
   } },
-  'hero-reverse-plate': { id: 'hero-reverse-plate', source: '/art/proof/proof-hero-reverse-plate.webp', aspect: 1.5, crops: { full } },
-  'hero-many-proofs': { id: 'hero-many-proofs', source: '/art/proof/proof-hero-many-proofs.webp', aspect: 1.5, crops: { full } },
-  'hero-two-plates': { id: 'hero-two-plates', source: '/art/proof/proof-hero-two-plates.webp', aspect: 1.5, crops: { full } },
-  'hero-inspection-light': { id: 'hero-inspection-light', source: '/art/proof/proof-hero-inspection-light.webp', aspect: 1.5, crops: { full } },
+  'hero-reverse-plate': { id: 'hero-reverse-plate', source: asset('art/proof/proof-hero-reverse-plate.webp'), aspect: 1.5, crops: { full } },
+  'hero-many-proofs': { id: 'hero-many-proofs', source: asset('art/proof/proof-hero-many-proofs.webp'), aspect: 1.5, crops: { full } },
+  'hero-two-plates': { id: 'hero-two-plates', source: asset('art/proof/proof-hero-two-plates.webp'), aspect: 1.5, crops: { full } },
+  'hero-inspection-light': { id: 'hero-inspection-light', source: asset('art/proof/proof-hero-inspection-light.webp'), aspect: 1.5, crops: { full } },
 }
 
 export const proofBeats: readonly ProofBeat[] = [

@@ -27,10 +27,11 @@ export interface LivingMotifDefinition {
 }
 
 const NIGHT_TILES = new Set([10, 11, 12, 13, 17])
+const asset = (path: string): string => `${import.meta.env.BASE_URL}${path}`
 
 export const fableWallTiles: readonly WallTileDefinition[] = Array.from({ length: 18 }, (_, index) => ({
   id: `fable-tile-${String(index).padStart(2, '0')}`,
-  source: `/art/fable-alive/tile-${String(index).padStart(2, '0')}.webp`,
+  source: asset(`art/fable-alive/tile-${String(index).padStart(2, '0')}.webp`),
   worldY: index * FABLE_TILE_HEIGHT,
   worldHeight: index === 17 ? FABLE_WORLD_HEIGHT - index * FABLE_TILE_HEIGHT : FABLE_TILE_HEIGHT,
   theme: NIGHT_TILES.has(index) ? 'night' : 'paper',
