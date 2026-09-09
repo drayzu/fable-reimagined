@@ -25,6 +25,7 @@ function FableAlive() {
   ))
   const [loaded, setLoaded] = useState<ReadonlySet<string>>(() => new Set())
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const [showSoundControl, setShowSoundControl] = useState(() => window.scrollY <= 48)
   const audio = useAmbientAudio(audioSourceRef)
 
   useEffect(() => {
@@ -32,6 +33,13 @@ function FableAlive() {
     const updatePreference = () => setPrefersReducedMotion(query.matches)
     query.addEventListener('change', updatePreference)
     return () => query.removeEventListener('change', updatePreference)
+  }, [])
+
+  useEffect(() => {
+    const updateSoundControl = () => setShowSoundControl(window.scrollY <= 48)
+    updateSoundControl()
+    window.addEventListener('scroll', updateSoundControl, { passive: true })
+    return () => window.removeEventListener('scroll', updateSoundControl)
   }, [])
 
   useEffect(() => {
@@ -108,14 +116,17 @@ function FableAlive() {
     <main className="fable-alive-root">
       {audio.supported && (
         <button
-          className={`sound-control is-visible is-night ${audio.enabled ? 'is-active' : ''}`}
+          className={`sound-control ${showSoundControl ? 'is-visible' : ''} is-night ${audio.enabled ? 'is-active' : ''}`}
           type="button"
           onClick={() => void audio.toggle()}
           aria-label={audio.enabled ? 'Turn sound off' : 'Turn sound on'}
           aria-pressed={audio.enabled}
         >
-          <span className={`sound-glyph ${audio.enabled ? 'is-sounding' : ''}`} aria-hidden="true"><i /><i /><i /></span>
-          <span>sound {audio.enabled ? 'on' : 'off'}</span>
+          <svg className={`sound-glyph ${audio.enabled ? 'is-sounding' : ''}`} viewBox="0 0 24 24" aria-hidden="true">
+            <path className="sound-speaker" d="M4 10v4h3l4 3V7l-4 3H4Z" />
+            <path className="sound-wave" d="M15 9.2a4.8 4.8 0 0 1 0 5.6" />
+            <path className="sound-wave sound-wave-wide" d="M18 6.7a8.2 8.2 0 0 1 0 10.6" />
+          </svg>
         </button>
       )}
 
