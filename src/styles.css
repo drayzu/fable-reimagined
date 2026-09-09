@@ -235,7 +235,7 @@ button, a { font: inherit; }
   transition: opacity .8s ease, transform .8s ease, color .6s ease, border-color .6s ease;
 }
 .sound-control.is-visible { opacity: .78; transform: translateY(0); pointer-events: auto; }
-.sound-control:hover, .sound-control:focus-visible { opacity: 1; outline: none; border-color: rgba(188, 118, 94, .8); }
+.sound-control.is-visible:hover, .sound-control.is-visible:focus-visible { opacity: 1; outline: none; border-color: rgba(188, 118, 94, .8); }
 .sound-control.is-night { color: rgba(232, 225, 211, .78); border-color: rgba(232, 225, 211, .28); background: rgba(18, 20, 27, .24); }
 .sound-glyph { width: 1.1rem; height: 1.1rem; overflow: visible; }
 .sound-speaker { fill: currentColor; }
