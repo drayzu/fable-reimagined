@@ -42,7 +42,7 @@ export function deriveAmbientAudioProfile(snapshot: AmbientAudioSnapshot): Ambie
   }
 }
 
-const TRACK_SOURCE = '/audio/swarm-instrumental.ogg'
+const TRACK_SOURCE = `${import.meta.env.BASE_URL}audio/swarm-instrumental.ogg`
 const TRACK_VOLUME = .36
 const FADE_DURATION = 1100
 

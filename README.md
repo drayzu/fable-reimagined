@@ -1,14 +1,12 @@
 # Fable Reimagined
 
-[Open the live site](https://drayzu.github.io/fable-reimagined/)
+[Open the live site](https://drayzu.github.io/fable-reimagined/fable-alive/)
 
 An experimental study in making an illustrated wall feel alive.
 
 The original drawing remains the foundation. Small interactive layers add mutable letters, rain, a travelling glint, a labyrinth-searching mark, and a flock that performs a collective flight when clicked.
 
-The project is still evolving. The living wall is available at:
-
-[the Fable Alive experience](https://drayzu.github.io/fable-reimagined/fable-alive).
+The project is still evolving. The living wall is available at the link above.
 
 ## Run locally
 
